@@ -3,6 +3,7 @@
 
 #include "Source.hpp"
 #include "navx_msgs/msg/global_position_int.hpp"
+#include <cmath>
 
 class GPS : public Source
 {
@@ -14,34 +15,32 @@ public:
     }
 
 private:
-    void gps_callback(const navx_msgs::msg::GlobalPositionInt::SharedPtr msg)
-    {
-        if (!msg) {
-            RCLCPP_ERROR(node_->get_logger(), "Received null GPS message");
-            return;
-        }
+    void gps_callback(const navx_msgs::msg::GlobalPositionInt::SharedPtr msg);
 
-        // 处理GPS消息
-        current_gps_position_ = *msg;
-        evaluate_gps_health();
-    }
+    void check_state_health() override;
 
-    void evaluate_gps_health()
-    {
-        // 基于GPS数据评估健康状态
-        if (current_gps_position_.lat == 0 || current_gps_position_.lon == 0) {
-            RCLCPP_ERROR(node_->get_logger(), "GPS data is invalid.");
-        } else {
-            RCLCPP_INFO(node_->get_logger(), "GPS data is healthy.");
-        }
-    }
+    void set_offset(double lastX, double lastY, double lastZ, double lastYAW) override;
 
-    navx_msgs::msg::GlobalPositionInt current_gps_position_;
+
+    navx_msgs::msg::GlobalPositionInt current_mavlink_position_;
 
     rclcpp::Subscription<navx_msgs::msg::GlobalPositionInt>::SharedPtr gps_sub_;
 
     bool origin_set_ = false;
     navx_msgs::msg::GlobalPositionInt origin_;
+
+    int fix_type_;
+
+    double d_lat;
+    double d_lon;
+    double d_alt;
+    double yaw_enu;
+
+    double offset_x = 0.0;
+    double offset_y = 0.0;
+    double offset_z = 0.0;  
+    double offset_yaw = 0.0;
+    
 };
 
 #endif  // GPS_HPP

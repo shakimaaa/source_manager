@@ -25,23 +25,32 @@ public:
 
     bool is_state_changed()const;
 
-    // 设置状态
-    void set_state(State new_state) {
-        current_state_ = new_state;
-    }
+    void set_state();
 
-    // 切换状态
-    virtual void switch_state(State new_state) = 0;
+ 
+
+    // check if the localization source is available
+    virtual void check_state_health() = 0;
 
     // 状态切换后的回调函数
-    virtual void handle_state_change() = 0;
+    virtual void set_offset(double lastX, double lastY, double lastZ, double lastYAW) = 0;
 
 protected:
     rclcpp::Node::SharedPtr node_;  // ROS 2 node
+
+
+
     State current_state_;           // current state
     State previous_state_;          // previous state
 
     bool state_changed_ = false; // state changed flag
+    bool gps_available = false;  // GPS data availability
+    bool slam_available = false; // SLAM data availability
+
+    double last_pose_x = 0.0; // last pose x coordinate
+    double last_pose_y = 0.0; // last pose y coordinate
+    double last_pose_z = 0.0; // last pose z coordinate
+    double last_yaw = 0.0;    // last yaw angle
     
 };
 
