@@ -30,14 +30,16 @@ void GPS::gps_callback(const navx_msgs::msg::GlobalPositionInt::SharedPtr msg)
     yaw_enu = M_PI/2 - gps_heading_rad;
     // Normalize yaw to the range [-pi, pi].
     yaw_enu = std::atan2(std::sin(yaw_enu), std::cos(yaw_enu));
+    received_time_ = this->now().seconds();
 }
 
 void GPS::set_offset(double lastX, double lastY, double lastZ, double lastYAW)
 {
-    offset_x = lastX - d_lon;
-    offset_y = lastY - d_lat;
-    offset_z = lastZ - d_alt;
-    offset_yaw = lastYAW - yaw_enu;
+    offset_x = d_lon - lastX;
+    offset_y = d_lat - lastY;
+    offset_z = d_alt - lastZ;
+    offset_yaw = yaw_enu - lastYAW;
+    
 
 }
 

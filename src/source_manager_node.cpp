@@ -17,7 +17,7 @@ SourceManagerNode::SourceManagerNode()
         "/position", 10);
 
 
-    this->declare_parameter("fix_type", 0);  // 默认值
+    this->declare_parameter("fix_type", 0);  // default to SLAM
   
 }
 

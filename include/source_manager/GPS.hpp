@@ -36,6 +36,8 @@ private:
     double d_alt;
     double yaw_enu;
 
+    double received_time_ = 0.0; // Time when the GPS data was received
+
     double offset_x = 0.0;
     double offset_y = 0.0;
     double offset_z = 0.0;  

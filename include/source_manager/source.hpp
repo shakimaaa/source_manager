@@ -51,6 +51,7 @@ protected:
     double last_pose_y = 0.0; // last pose y coordinate
     double last_pose_z = 0.0; // last pose z coordinate
     double last_yaw = 0.0;    // last yaw angle
+    double last_pub_time = 0.0; // last publish time
     
 };
 

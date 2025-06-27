@@ -20,15 +20,7 @@ private:
 
     void set_offset(double lastX, double lastY, double lastZ, double lastYAW) override;
 
-    double calculate_yaw(const nav_msgs::msg::Odometry &odometry) const
-    {
-        // Calculate yaw from the orientation quaternion in the ENU frame.
-        double siny_cosp = 2 * (odometry.pose.pose.orientation.w * odometry.pose.pose.orientation.z +
-                                odometry.pose.pose.orientation.x * odometry.pose.pose.orientation.y);
-        double cosy_cosp = 1 - 2 * (odometry.pose.pose.orientation.y * odometry.pose.pose.orientation.y +
-                                    odometry.pose.pose.orientation.z * odometry.pose.pose.orientation.z);
-        return std::atan2(siny_cosp, cosy_cosp);
-    }
+    double calculate_yaw(const nav_msgs::msg::Odometry &odometry) const;
 
     nav_msgs::msg::Odometry current_odometry_;
 

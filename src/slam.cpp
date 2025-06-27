@@ -31,8 +31,19 @@ void SLAM::check_state_health()
 
 void SLAM::set_offset(double lastX, double lastY, double lastZ, double lastYAW)
 {
-    offset_x = lastX - current_odometry_.pose.pose.position.x;
-    offset_y = lastY - current_odometry_.pose.pose.position.y;
-    offset_z = lastZ - current_odometry_.pose.pose.position.z;
-    offset_yaw = lastYAW - calculate_yaw(current_odometry_);
+    offset_x = lacurrent_odometry_.pose.pose.position.xstX - lastX;
+    offset_y = current_odometry_.pose.pose.position.y - lastY;
+    offset_z = current_odometry_.pose.pose.position.z - lastZ;
+    offset_yaw = calculate_yaw(current_odometry_) - lastYAW;
+    
+}
+
+void SLAM::calculate_yaw(const nav_msgs::msg::Odometry &odometry) const
+{
+    // Calculate yaw from the orientation quaternion in the ENU frame.
+    double siny_cosp = 2 * (odometry.pose.pose.orientation.w * odometry.pose.pose.orientation.z +
+                            odometry.pose.pose.orientation.x * odometry.pose.pose.orientation.y);
+    double cosy_cosp = 1 - 2 * (odometry.pose.pose.orientation.y * odometry.pose.pose.orientation.y +
+                                odometry.pose.pose.orientation.z * odometry.pose.pose.orientation.z);
+    return std::atan2(siny_cosp, cosy_cosp);
 }

@@ -71,4 +71,5 @@ void SourceManagerNode::publish_odom()
     source_->last_pose_y = position_msg.pose.pose.position.y;
     source_->last_pose_z = position_msg.pose.pose.position.z;
     source_->last_yaw = std::atan2(position_msg.pose.pose.orientation.z, position_msg.pose.pose.orientation.w);
+    source->last_pub_time = this->now().seconds();
 }
