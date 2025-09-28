@@ -4,15 +4,15 @@
   <name>source_manager</name>
   <version>0.0.0</version>
   <description>TODO: Package description</description>
-  <maintainer email="zbohao7@gmail.com">shakima</maintainer>
+  <maintainer email="zbohao7@gmail.com">beauhowe</maintainer>
   <license>TODO: License declaration</license>
 
-  <depend>rclcpp</depend>
-  <depend>navx_msgs</depend>
-  <depend>geometry_msgs</depend>
-  <depend>nav_msgs</depend>
-  <depend>std_msgs</depend>
+  <buildtool_depend>ament_cmake</buildtool_depend>
 
+  <depend>rclcpp</depend>
+
+  <test_depend>ament_lint_auto</test_depend>
+  <test_depend>ament_lint_common</test_depend>
 
   <export>
     <build_type>ament_cmake</build_type>
