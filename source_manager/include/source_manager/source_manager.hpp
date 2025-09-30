@@ -25,10 +25,21 @@ public:
 
 private:
     rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr imu_sub_;
+    rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr curr_odometry_pub_;
+    rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr odometry_;
+    rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr path_pub_;
+
+    rclcpp::TimerBase::SharedPtr timer_;
 
     std::unique_ptr<GPS> gps_source_;
     std::unique_ptr<SLAM> slam_source_;
-    std::unique_ptr<BaseData> shared_data_;
+    std::shared_ptr<BaseData> shared_data_;
+
+    SourceBase::State active_source_ = SourceBase::State::UNINIT;
+    SourceBase::State previous_source_ = SourceBase::State::UNINIT;
 
     void imuCallback(const sensor_msgs::msg::Imu::SharedPtr msg);
-}
+    void timerCallback();
+    void publishPropagateOdometry();
+    void checkSourceHealth();
+};

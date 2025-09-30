@@ -5,6 +5,12 @@ SourceManager::SourceManager() : Node("SourceManager")
     imu_sub_ = this->create_subscription<sensor_msgs::msg::Imu>(
         "/mav/imu/data_raw", rclcpp::QoS(100).best_effort(),
         std::bind(&SourceManager::imuCallback, this, std::placeholders::_1));
+    
+    timer_ = this->create_wall_timer(
+        std::chrono::milliseconds(5),
+        std::bind(&SourceManager::timerCallback, this));
+
+    RCLCPP_INFO(this->get_logger(), "SourceManager node statrted.");
 }
 
 void SourceManager::init() {
@@ -35,3 +41,29 @@ void SourceManager::imuCallback(const sensor_msgs::msg::Imu::SharedPtr msg) {
     if (slam_source_) slam_source_->setImudata(linearAcceleration, angularVelocity, orientation);
     
 }
+
+void SourceManager::checkSourceHealth() {
+    if (gps_source_ ->isHealthy() && slam_source_->isHealthy()) {
+        active_source_ = SourceBase::State::GPS;
+    } else if(gps_source_ ->isHealthy()) {
+        active_source_ = SourceBase::State::GPS;
+    } else if(slam_source_->isHealthy()) {
+        active_source_ = SourceBase::State::SLAM;
+    } else {
+        active_source_ = SourceBase::State::UNINIT;
+    }
+
+    RCLCPP_INFO(this->get_logger(), "healthy GPS: %s, healthy SLAM: %s",
+                gps_source_->isHealthy() ? "true" : "false",
+                slam_source_->isHealthy() ? "true" : "false");
+}
+
+void publishPropagateOdometry() {
+        
+}
+
+
+void SourceManager::timerCallback() {
+    
+}
+

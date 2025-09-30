@@ -15,14 +15,32 @@ GPS::GPS(rclcpp::Node::SharedPtr node, std::shared_ptr<BaseData> data)
         std::bind(&GPS::gpsCallback, this, std::placeholders::_1),
         gps_sub_opt);
     
-    gps_timer_ = node_->create_timer(
+    gps_timer_ = node_->create_wall_timer(
         std::chrono::milliseconds(10),
         std::bind(&GPS::timerCallback, this));
+
+    RCLCPP_INFO(node_->get_logger(), "GPS source started.");
 }
+
+void GPS::setGpsdata() {
+
+    latest_gps_p_ = r_gps_p_ + gps_offset_p_;
+    latest_gps_q_ = r_gps_q_ * gps_offset_q_;
+    latest_gps_v_ = r_gps_v_ ;
+    latest_gps_a_ = r_gps_a_ ;
+    latest_gps_yaw_ = r_gps_yaw_ + gps_offset_yaw_;
+}
+
+void GPS::setCurrPose(const Eigen::Vector3d& pos, const Eigen::Vector3d& vel, const Eigen::Quaterniond& q) {
+    base_data_->gps_curr_pos = pos;
+    base_data_->gps_curr_vel = vel;
+    base_data_->gps_curr_q = q;
+}
+
 
 void GPS::gpsCallback(const nav_msgs::msg::Odometry::SharedPtr msg) {
     RCLCPP_INFO(node_->get_logger(), "GPS data received");
-
+    last_get_gps_time_ = node_->now();
     // if (!gpsOdomIsValid(*msg)) {
     //     RCLCPP_WARN(node_->get_logger(), "fix_type <3, Invalid GPS data");
     //     setHealthy(false);
@@ -43,16 +61,27 @@ void GPS::gpsCallback(const nav_msgs::msg::Odometry::SharedPtr msg) {
                 msg->pose.pose.orientation.x,
                 msg->pose.pose.orientation.y,
                 msg->pose.pose.orientation.z).normalized();
-    RCLCPP_INFO(node_->get_logger(), "r_gps_p_ : %f, %f, %f\n r_gps_v_ : %f, %f, %f\n r_gps_a_ : %f, %f, %f\n r_gps_q_ : %f, %f, %f, %f",
-                r_gps_p_(0), r_gps_p_(1), r_gps_p_(2),
-                r_gps_v_(0), r_gps_v_(1), r_gps_v_(2),
-                r_gps_a_(0), r_gps_a_(1), r_gps_a_(2),
-                r_gps_q_(0), r_gps_q_(1), r_gps_q_(2), r_gps_q_(3));
+    
+    r_gps_yaw_ = std::atan2(2.0*(r_gps_q_.w()*r_gps_q_.z() + r_gps_q_.x()*r_gps_q_.y()),
+                        1.0 - 2.0*(r_gps_q_.y()*r_gps_q_.y() + r_gps_q_.z()*r_gps_q_.z()));
+    
+    RCLCPP_INFO(node_->get_logger(),
+        "r_gps_p_: %.3f, %.3f, %.3f\n"
+        "r_gps_v_: %.3f, %.3f, %.3f\n"
+        "r_gps_a_: %.3f, %.3f, %.3f\n"
+        "r_gps_q_: %.3f, %.3f, %.3f, %.3f",
+        r_gps_p_(0), r_gps_p_(1), r_gps_p_(2),
+        r_gps_v_(0), r_gps_v_(1), r_gps_v_(2),
+        r_gps_a_(0), r_gps_a_(1), r_gps_a_(2),
+        r_gps_q_.w(), r_gps_q_.x(), r_gps_q_.y(), r_gps_q_.z());
+
+    setGpsdata();
     receiving_gps_ = false;
 
 }
 
 void GPS::timerCallback() {
+    
     if (!receiving_gps_) {
         rclcpp::Time now_ = node_->now();
         if (last_gps_time_.seconds() == 0) {
@@ -63,14 +92,14 @@ void GPS::timerCallback() {
         double dt = (now_ - last_gps_time_).seconds();
         last_gps_time_ = now_;
 
-        imu_acc.z() -= 9.81;
+        imu_acc_.z() -= 9.81;
 
         integrated_v_imu_ += imu_acc_ * dt;
         // Calculate the difference in magnitude
-        double diff = (r_gps_v_ - integrated_v_imu_).norm();
+        double diff = (latest_gps_v_ - integrated_v_imu_).norm();
         double angle = 0.0;
-        if (r_gps_v_.norm() > 1e-3 && integrated_v_imu_.norm() > 1e-3) {
-            double cos_angle = r_gps_v_.normalized().dot(integrated_v_imu_.normalized());
+        if (latest_gps_v_.norm() > 1e-3 && integrated_v_imu_.norm() > 1e-3) {
+            double cos_angle = latest_gps_v_.normalized().dot(integrated_v_imu_.normalized());
             cos_angle = std::clamp(cos_angle, -1.0, 1.0);
             angle = std::acos(cos_angle) * 180.0 / M_PI;
         }
@@ -94,9 +123,23 @@ void GPS::timerCallback() {
     double dt_gps = (node_->now() - last_propagate_time_).seconds();
     last_propagate_time_ = node_->now();
     if (dt_gps <= 0 || dt_gps > 1.0) {
-        RCLCPP_WARN(node_->get_logger(), "Invalid gps dt = %f", dt_gps);
+        RCLCPP_WARN(node_->get_logger(), "q gps dt = %f", dt_gps);
         return;
     }
+    Eigen::Vector3d un_gps_acc_0 = latest_gps_q_ * latest_gps_acc_0 - g_;
+    Eigen::Vector3d un_gps_gyr = 0.5 * (latest_gps_gyr_0 + imu_gyro_);
+    latest_gps_q_ = latest_gps_q_ * deltaQ(un_gps_gyr * dt_gps);
+    Eigen::Vector3d un_gps_acc_1 = latest_gps_q_ * imu_acc_ - g_;
+    Eigen::Vector3d un_gps_acc = 0.5 * (un_gps_acc_0 + un_gps_acc_1);
+    latest_gps_p_ = latest_gps_p_ + latest_gps_v_ * dt_gps + 0.5 * un_gps_acc * dt_gps * dt_gps;
+    latest_gps_v_ = latest_gps_v_ + un_gps_acc * dt_gps;
+    latest_gps_a_ = un_gps_acc;
+    latest_gps_gyr_0 = imu_gyro_;
+    latest_gps_acc_0 = imu_acc_;
+    latest_gps_yaw_ = std::atan2(2.0*(latest_gps_q_.w()*latest_gps_q_.z() + latest_gps_q_.x()*latest_gps_q_.y()),
+                        1.0 - 2.0*(latest_gps_q_.y()*latest_gps_q_.y() + latest_gps_q_.z()*latest_gps_q_.z()));
+
+    setCurrPose(latest_gps_p_, latest_gps_v_, latest_gps_q_);
 }
      
 
@@ -117,4 +160,16 @@ void GPS::setHealthy(bool healthy) {
 bool GPS::gpsOdomIsValid(const nav_msgs::msg::Odometry& o) {
    const auto& p = o.pose.covariance;
    return (p[0] < 1e5 && p[7] < 1e5 && p[14] < 1e5);
+}
+
+bool GPS::isHealthy() {
+    rclcpp::Time now_ = node_->now();
+    double dt = (now_ - last_get_gps_time_).seconds();
+    RCLCPP_INFO(node_->get_logger(), "time diff = %f", dt);
+    if (dt > 1.0) {
+        RCLCPP_WARN(node_->get_logger(), "GPS data empty.");
+        return false;
+    }
+
+    return base_data_->gps_healthy;
 }

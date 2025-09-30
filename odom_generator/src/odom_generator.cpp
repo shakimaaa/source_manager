@@ -57,7 +57,7 @@ private:
             return;
         }
 
-        if (msg->fix_type < 3) {
+        if (msg->gps_status < 3) {
             RCLCPP_WARN(this->get_logger(), "fix_type <3, Invalid GPS data");
             if (origin_set_) {
                 origin_set_ = false;
