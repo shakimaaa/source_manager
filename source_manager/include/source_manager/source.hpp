@@ -20,10 +20,26 @@ struct BaseData
     Eigen::Vector3d gps_curr_pos{Eigen::Vector3d::Zero()};
     Eigen::Vector3d gps_curr_vel{Eigen::Vector3d::Zero()};
     Eigen::Quaterniond gps_curr_q{Eigen::Quaterniond::Identity()};
+    Eigen::Vector3d p_offset_gps{Eigen::Vector3d::Zero()};
+    Eigen::Quaterniond q_offset_gps{Eigen::Quaterniond::Identity()};
+    double yaw_offset_gps = 0.0;
+    Eigen::Vector3d gps_odom_p{Eigen::Vector3d::Zero()};
+    Eigen::Vector3d gps_odom_v{Eigen::Vector3d::Zero()};
+    Eigen::Vector3d gps_odom_a{Eigen::Vector3d::Zero()};
+    Eigen::Quaterniond gps_odom_q{Eigen::Quaterniond::Identity()};
+    
+
 
     Eigen::Vector3d slam_curr_pos{Eigen::Vector3d::Zero()};
     Eigen::Vector3d slam_curr_vel{Eigen::Vector3d::Zero()};
     Eigen::Quaterniond slam_curr_q{Eigen::Quaterniond::Identity()};
+    Eigen::Vector3d p_offset_slam{Eigen::Vector3d::Zero()};
+    Eigen::Quaterniond q_offset_slam{Eigen::Quaterniond::Identity()};
+    double yaw_offset_slam = 0.0;
+    Eigen::Vector3d slam_odom_p{Eigen::Vector3d::Zero()};
+    Eigen::Vector3d slam_odom_v{Eigen::Vector3d::Zero()};
+    Eigen::Vector3d slam_odom_a{Eigen::Vector3d::Zero()};
+    Eigen::Quaterniond slam_odom_q{Eigen::Quaterniond::Identity()};
     
     bool gps_healthy = false;
     bool slam_healthy = false;
@@ -43,6 +59,7 @@ public:
     virtual void setHealthy(bool healthy); 
     virtual void setCurrPose(const Eigen::Vector3d& pos, const Eigen::Vector3d& vel, const Eigen::Quaterniond& q);
     virtual bool isHealthy();
+    virtual void updateData();
     
 
     static Eigen::Quaterniond deltaQ(const Eigen::Vector3d& theta);

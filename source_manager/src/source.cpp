@@ -3,7 +3,6 @@
 SourceBase::SourceBase(std::shared_ptr<rclcpp::Node> node, std::shared_ptr<BaseData> base_data)
 : node_(std::move(node)), base_data_(std::move(base_data))
 {
-    // // 可选：检查 node_ 是否为空并打印警告
     // if (!node_) {
     //     RCLCPP_WARN(rclcpp::get_logger("SourceBase"), "SourceBase constructed with null node");
     // }
@@ -50,3 +49,5 @@ void SourceBase::setCurrPose(const Eigen::Vector3d& pos, const Eigen::Vector3d& 
 bool SourceBase::isHealthy() {
     return true;
 }
+
+void SourceBase::updateData() {}

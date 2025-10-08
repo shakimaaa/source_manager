@@ -25,8 +25,8 @@ public:
 
 private:
     rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr imu_sub_;
-    rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr curr_odometry_pub_;
-    rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr odometry_;
+    rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr propagate_odometry_pub_;
+    rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr odometry_pub_;
     rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr path_pub_;
 
     rclcpp::TimerBase::SharedPtr timer_;
@@ -41,5 +41,6 @@ private:
     void imuCallback(const sensor_msgs::msg::Imu::SharedPtr msg);
     void timerCallback();
     void publishPropagateOdometry();
+    void publishOdometry();
     void checkSourceHealth();
 };

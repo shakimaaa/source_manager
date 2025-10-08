@@ -19,8 +19,10 @@ public:
     void setHealthy(bool healthy) override;
     void setCurrPose(const Eigen::Vector3d& pos, const Eigen::Vector3d& vel, const Eigen::Quaterniond& q) override;
     bool isHealthy() override;
+    void updateData() override;
 
     void setGpsdata();
+    void setOdometry();
 
 private:
     rclcpp::CallbackGroup::SharedPtr gps_callback_group_;

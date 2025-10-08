@@ -25,12 +25,26 @@ void SLAM::setHealthy(bool healthy) {
     base_data_->slam_healthy = healthy;
 }
 
+void SLAM::updateData() {
+    slam_offset_p_ = base_data_->p_offset_slam;
+    slam_offset_q_ = base_data_->q_offset_slam;
+    slam_offset_yaw_ = base_data_->yaw_offset_slam;
+}
+
+void SLAM::setOdometry() {
+    base_data_->slam_odom_p = latest_slam_p_;
+    base_data_->slam_odom_q = latest_slam_q_;
+    base_data_->slam_odom_v = latest_slam_v_;
+    base_data_->slam_odom_a = latest_slam_a_;
+}
+
 void SLAM::setSlamdata() {
     latest_slam_p_ = r_slam_p_ + slam_offset_p_;
     latest_slam_q_ = r_slam_q_ * slam_offset_q_;
     latest_slam_v_ = r_slam_v_;
     latest_slam_a_ = r_slam_a_;
     latest_slam_yaw_ = r_slam_yaw_ + slam_offset_yaw_;
+    setOdometry();
 }
 
 void SLAM::setCurrPose(const Eigen::Vector3d& pos, const Eigen::Vector3d& vel, const Eigen::Quaterniond& q) {

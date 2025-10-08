@@ -22,6 +22,19 @@ GPS::GPS(rclcpp::Node::SharedPtr node, std::shared_ptr<BaseData> data)
     RCLCPP_INFO(node_->get_logger(), "GPS source started.");
 }
 
+void GPS::updateData() {
+    gps_offset_p_ = base_data_->p_offset_gps;
+    gps_offset_q_ = base_data_->q_offset_gps;
+    gps_offset_yaw_ = base_data_->yaw_offset_gps;
+}
+
+void GPS::setOdometry() {
+    base_data_->gps_odom_p = latest_gps_p_;
+    base_data_->gps_odom_q = latest_gps_q_;
+    base_data_->gps_odom_v = latest_gps_v_;
+    base_data_->gps_odom_a = latest_gps_a_;
+    
+}
 void GPS::setGpsdata() {
 
     latest_gps_p_ = r_gps_p_ + gps_offset_p_;
@@ -29,6 +42,7 @@ void GPS::setGpsdata() {
     latest_gps_v_ = r_gps_v_ ;
     latest_gps_a_ = r_gps_a_ ;
     latest_gps_yaw_ = r_gps_yaw_ + gps_offset_yaw_;
+    setOdometry();
 }
 
 void GPS::setCurrPose(const Eigen::Vector3d& pos, const Eigen::Vector3d& vel, const Eigen::Quaterniond& q) {
