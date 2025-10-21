@@ -1,0 +1,13 @@
+SourceManager:
+  ros__parameters:
+
+  manager.priority_source : [2, 1]  # 2 = GPS, 1 = SLAM
+
+  slam.maxSpeeddiff : 4.0
+  slam.maxAnglediff : 100.0
+  slam.canrestart : true
+  
+
+  gps.maxSpeeddiff : 4.0
+  gps.maxAnglediff : 100.0
+  gps.canrestart : false

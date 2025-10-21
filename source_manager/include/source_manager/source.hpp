@@ -4,52 +4,15 @@
 #include <Eigen/Core>
 #include <Eigen/Geometry>
 #include <cmath>
+#include "source_manager/util.hpp"
 
 
 // enum  class State { UNINIT = 0, SLAM = 1, GPS = 2 };
-struct BaseData
-{
-    Eigen::Vector3d curr_pos{Eigen::Vector3d::Zero()};
-    Eigen::Vector3d curr_vel{Eigen::Vector3d::Zero()};
-    Eigen::Quaterniond curr_q{Eigen::Quaterniond::Identity()};
-
-    Eigen::Vector3d prev_pos{Eigen::Vector3d::Zero()};
-    Eigen::Vector3d prev_vel{Eigen::Vector3d::Zero()};
-    Eigen::Quaterniond prev_q{Eigen::Quaterniond::Identity()};
-
-    Eigen::Vector3d gps_curr_pos{Eigen::Vector3d::Zero()};
-    Eigen::Vector3d gps_curr_vel{Eigen::Vector3d::Zero()};
-    Eigen::Quaterniond gps_curr_q{Eigen::Quaterniond::Identity()};
-    Eigen::Vector3d p_offset_gps{Eigen::Vector3d::Zero()};
-    Eigen::Quaterniond q_offset_gps{Eigen::Quaterniond::Identity()};
-    double yaw_offset_gps = 0.0;
-    Eigen::Vector3d gps_odom_p{Eigen::Vector3d::Zero()};
-    Eigen::Vector3d gps_odom_v{Eigen::Vector3d::Zero()};
-    Eigen::Vector3d gps_odom_a{Eigen::Vector3d::Zero()};
-    Eigen::Quaterniond gps_odom_q{Eigen::Quaterniond::Identity()};
-    
-
-
-    Eigen::Vector3d slam_curr_pos{Eigen::Vector3d::Zero()};
-    Eigen::Vector3d slam_curr_vel{Eigen::Vector3d::Zero()};
-    Eigen::Quaterniond slam_curr_q{Eigen::Quaterniond::Identity()};
-    Eigen::Vector3d p_offset_slam{Eigen::Vector3d::Zero()};
-    Eigen::Quaterniond q_offset_slam{Eigen::Quaterniond::Identity()};
-    double yaw_offset_slam = 0.0;
-    Eigen::Vector3d slam_odom_p{Eigen::Vector3d::Zero()};
-    Eigen::Vector3d slam_odom_v{Eigen::Vector3d::Zero()};
-    Eigen::Vector3d slam_odom_a{Eigen::Vector3d::Zero()};
-    Eigen::Quaterniond slam_odom_q{Eigen::Quaterniond::Identity()};
-    
-    bool gps_healthy = false;
-    bool slam_healthy = false;
-
-};
 
 class SourceBase
 {
 public:
-    SourceBase(std::shared_ptr<rclcpp::Node> node, std::shared_ptr<BaseData> base_data);
+    SourceBase(std::shared_ptr<rclcpp::Node> node);
 
     enum class State { UNINIT = 0, SLAM = 1, GPS = 2 };
 
@@ -59,14 +22,15 @@ public:
     virtual void setHealthy(bool healthy); 
     virtual void setCurrPose(const Eigen::Vector3d& pos, const Eigen::Vector3d& vel, const Eigen::Quaterniond& q);
     virtual bool isHealthy();
-    virtual void updateData();
-    
+    virtual void setOffset(const Eigen::Vector3d& p, const Eigen::Quaterniond& q, double yaw);
+    virtual NavState getPropagateOdometry() const = 0;
+    virtual NavState getOdometry() const = 0;
+    virtual bool canRestart() = 0;
+    virtual void restartSource() = 0;
 
-    static Eigen::Quaterniond deltaQ(const Eigen::Vector3d& theta);
 
     
 protected:
     std::shared_ptr<rclcpp::Node> node_;
-    std::shared_ptr<BaseData> base_data_;
 
 };

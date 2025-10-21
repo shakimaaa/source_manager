@@ -5,6 +5,8 @@ project(source_manager)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+
+
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
@@ -38,6 +40,7 @@ add_library(source_managerlib SHARED
   src/gps.cpp
   src/slam.cpp
   src/source_manager.cpp
+  src/util.cpp
 )
 
 target_include_directories(source_managerlib
@@ -65,7 +68,7 @@ ament_target_dependencies(source_managerlib
 
 
 # add executable
-add_executable(source_manager_node testNode.cpp)
+add_executable(source_manager_node main.cpp)
 target_link_libraries(source_manager_node source_managerlib rclcpp_lifecycle::rclcpp_lifecycle)
 
 ament_target_dependencies(source_manager_node
@@ -93,6 +96,10 @@ install(TARGETS source_manager_node
 
 install(DIRECTORY include/
   DESTINATION include
+)
+
+install(DIRECTORY config/
+  DESTINATION share/${PROJECT_NAME}/config
 )
 
 # export configuration
