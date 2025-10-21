@@ -234,26 +234,35 @@ void SourceManager::onSwitchSource(const std::shared_ptr<xion_msg::srv::SwitchSo
 // }
 
 void SourceManager::checkSourceHealth() {
-    // const bool gps_healthy = gps_source_ ? gps_source_->isHealthy() : false;
-    // const bool slam_healthy = slam_source_ ? slam_source_->isHealthy() : false;
+    const bool gps_healthy = gps_source_ ? gps_source_->isHealthy() : false;
+    const bool slam_healthy = slam_source_ ? slam_source_->isHealthy() : false;
 
     SourceBase::State state = SourceBase::State::UNINIT;
 
-    // auto healthy = [&](SourceBase::State s)->bool {
-    //     switch (s) {
-    //         case SourceBase::State::GPS: return gps_healthy;
-    //         case SourceBase::State::SLAM: return slam_healthy;
-    //         default: return false;
-    //     }
-    // };
+    auto healthy = [&](SourceBase::State s)->bool {
+        switch (s) {
+            case SourceBase::State::GPS: return gps_healthy;
+            case SourceBase::State::SLAM: return slam_healthy;
+            default: return false;
+        }
+    };
 
     for (auto s : priority_source_) {
-        auto src = getSource(s);
-        if (src && src->isHealthy()) {
+        if (healthy(s)) {
             state = s;
             break;
         }
     }
+
+    // for (auto s : priority_source_) {
+    //     auto src = getSource(s);
+    //     if (src = nullptr) continue;
+    //     if (src && src->isHealthy()) {
+            // std::cout<< "1" <<std::endl;    
+    //         state = s;
+    //         break;
+    //     }
+    // }
     // active_source_ = state;
 
     if (state != active_source_) {
@@ -262,9 +271,10 @@ void SourceManager::checkSourceHealth() {
         RCLCPP_WARN(this->get_logger(), "AUTO select: %s", stateToString(active_source_));
     }
 
-    RCLCPP_INFO(this->get_logger(), "healthy GPS: %s, healthy SLAM: %s",
-                gps_source_->isHealthy() ? "true" : "false",
-                slam_source_->isHealthy() ? "true" : "false");
+    RCLCPP_INFO(this->get_logger(), "Current source: %s healthy GPS: %s, healthy SLAM: %s",
+                stateToString(active_source_),
+                gps_healthy ? "true" : "false",
+                slam_healthy ? "true" : "false");
 }
 
 void SourceManager::update() {
@@ -277,7 +287,7 @@ void SourceManager::update() {
 
 void SourceManager::changeSourceType() {
     if (active_source_ != previous_source_ && previous_source_ != SourceBase::State::UNINIT) {
-        RCLCPP_INFO(this->get_logger(), "State changed to: %d", static_cast<int>(active_source_));\
+        RCLCPP_INFO(this->get_logger(), "State changed to: %d", static_cast<int>(active_source_));
         is_state_changed_ = true;
     }
 
@@ -286,6 +296,11 @@ void SourceManager::changeSourceType() {
 
         auto previous_source = getSource(previous_source_);
         auto current_source = getSource(active_source_);
+        if (previous_source == nullptr || current_source == nullptr) {
+            previous_source_ = active_source_;
+            is_state_changed_ = false;
+            return;
+        }
         auto odom = previous_source->getOdometry();
 
         const Eigen::Vector3d pos = odom.p;

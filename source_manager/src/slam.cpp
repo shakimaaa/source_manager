@@ -18,7 +18,7 @@ SLAM::SLAM(rclcpp::Node::SharedPtr node)
     slam_sub_opt.callback_group = slam_callback_group_;
 
     slam_sub_ = node_->create_subscription<xion_msg::msg::ExtendedOdometry>(
-        "/odometry_source",10,
+        "/position/slam_odom",10,
         std::bind(&SLAM::slamCallback, this, std::placeholders::_1),
         slam_sub_opt);
     
