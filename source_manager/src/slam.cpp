@@ -3,12 +3,14 @@
 SLAM::SLAM(rclcpp::Node::SharedPtr node)
     : SourceBase(std::move(node)) {
 
-    node_->declare_parameter("slam.maxSpeeddiff", 4.0);
-    node_->declare_parameter("slam.maxAnglediff", 100.0);
+    node_->declare_parameter("slam.maxSpeeddiff", 40.0);
+    node_->declare_parameter("slam.maxAnglediff", 200.0);
+    node_->declare_parameter("slam.restart_time_threshold", 3.0);
     node_->declare_parameter("slam.canrestart", true);
 
     node_->get_parameter("slam.maxSpeeddiff", maxSpeeddiff_);
     node_->get_parameter("slam.maxAnglediff", maxAnglediff_);
+    node_->get_parameter("slam.restart_time_threshold", restart_time_threshold_);
     node_->get_parameter("slam.canrestart", can_restart_);
 
     slam_callback_group_ = node_->create_callback_group(
@@ -53,7 +55,7 @@ bool SLAM::canRestart() {
         }
         rclcpp::Time un_health_time = node_->now();
         double duration = (un_health_time - unhealthy_start_time_).seconds();
-        if (duration > 2.0){
+        if (duration > restart_time_threshold_){
             RCLCPP_ERROR(node_->get_logger(), "[SLAM source] SLAM unhealthy for 2 seconds. Requesting restart...");
             unhealthy_start_time_ = rclcpp::Time(0, 0);
             return true;

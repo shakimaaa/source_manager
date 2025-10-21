@@ -5,6 +5,7 @@ SourceManager:
 
   slam.maxSpeeddiff : 4.0
   slam.maxAnglediff : 100.0
+  slam.restart_time_threshold : 3.0
   slam.canrestart : true
   
 

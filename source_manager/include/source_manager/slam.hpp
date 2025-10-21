@@ -109,6 +109,7 @@ private:
     rclcpp::Client<lifecycle_msgs::srv::GetState>::SharedPtr get_state_client_;
     bool can_restart_ = true;
     std::atomic_bool restarting_{false};
+    double restart_time_threshold_ = 0.0;
     
     
     rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr srv_set_restart_req_;
