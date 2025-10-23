@@ -192,6 +192,7 @@ void SLAM::slamCallback(const xion_msg::msg::ExtendedOdometry::SharedPtr msg)
         return;
     }
 
+    // check timeout
     last_get_slam_time_ = node_->now();
     receiving_slam_ = true;
 
@@ -223,41 +224,102 @@ void SLAM::slamCallback(const xion_msg::msg::ExtendedOdometry::SharedPtr msg)
         r_slam_q_.w(), r_slam_q_.x(), r_slam_q_.y(), r_slam_q_.z());
     
     setSlamdata();
+
+    rclcpp::Time this_stamp = msg->header.stamp;
+    if (curr_odom_stamp_.nanoseconds() != 0) {
+        last_odom_stamp_ = curr_odom_stamp_;
+        last_odom_state_ = curr_odom_state_;
+    } else {
+        // first time，last=curr
+        last_odom_stamp_ = this_stamp;
+        last_odom_state_.p = latest_slam_p_;
+        last_odom_state_.v = latest_slam_v_;
+        last_odom_state_.q = latest_slam_q_;
+        last_odom_state_.yaw = latest_slam_yaw_;
+    }
+    curr_odom_stamp_ = this_stamp;
+    curr_odom_state_.p = latest_slam_p_;
+    curr_odom_state_.v = latest_slam_v_;
+    curr_odom_state_.q = latest_slam_q_;
+    curr_odom_state_.yaw = latest_slam_yaw_;
+    if (last_odom_stamp_.nanoseconds() != 0) {
+        odom_pending_compare_.store(true);
+    }
+
     receiving_slam_ = false;
     // restartRequested();
 }
 
 void SLAM::timerCallback() {
-    if (!receiving_slam_) {
-        rclcpp::Time now_ = node_->now();
-        if (last_slam_time_.seconds() == 0){
-            last_slam_time_ = now_;
-            return;
-        }
 
-        double dt = (now_ - last_slam_time_).seconds();
-        last_slam_time_ = now_;
+    if (!odom_pending_compare_.load()) return;
 
-        imu_acc_.z() -= 9.81;
+    const double t0 = last_odom_stamp_.seconds();
+    const double t1 = curr_odom_stamp_.seconds();
 
-        integrated_v_imu_ += imu_acc_ * dt;
-        // Calculate the difference in magnitude
-        double diff = (latest_slam_v_ - integrated_v_imu_).norm();
-        double angle = 0.0;
-        if (latest_slam_v_.norm() > 1e-3 && integrated_v_imu_.norm() > 1e-3) {
-            double cos_angle = latest_slam_v_.normalized().dot(integrated_v_imu_.normalized());
-            cos_angle = std::clamp(cos_angle, -1.0, 1.0);
-            angle = std::acos(cos_angle) * 180.0 / M_PI;
-        }
-
-        if (diff > maxSpeeddiff_ && angle > maxAnglediff_)
-        {
-            setHealthy(false);
-            RCLCPP_WARN(node_->get_logger(), "[SLAM source] speed difference = %f, angle = %f", diff, angle);
-        }else {
-            setHealthy(true);
-        }
+    if (t1 <= t0) {
+        odom_pending_compare_.store(false);
+        return;
     }
+
+    std::vector<ImuLite> seg;
+    if (!extractImuInterval_(t0, t1, seg)) {
+        // Insufficient IMU samples, skip this time and wait for next time
+        odom_pending_compare_.store(false);
+        return;
+    }
+    Eigen::Vector3d dvel_imu;
+    integrateIntervalMidpoint_(seg, dvel_imu);
+    integrated_v_imu_ = last_odom_state_.v + dvel_imu;
+    const Eigen::Vector3d v_slam = curr_odom_state_.v;
+
+    double diff = (v_slam - integrated_v_imu_).norm();
+
+    double angle = 0.0;
+    if (v_slam.norm() > 1e-3 && integrated_v_imu_.norm() > 1e-3) {
+        double c = v_slam.normalized().dot(integrated_v_imu_.normalized());
+        c = std::clamp(c, -1.0, 1.0);
+        angle = std::acos(c) * 180.0 / M_PI;
+    }
+    if (diff > maxSpeeddiff_ && angle > maxAnglediff_) {
+        setHealthy(false);
+        RCLCPP_WARN(node_->get_logger(), "speed difference = %f, angle = %f", diff, angle);
+    } else {
+        //std::cout << "speed difference = " << diff << ", angle = " << angle << std::endl;
+        setHealthy(true);
+    }
+
+
+    // if (!receiving_slam_) {
+    //     rclcpp::Time now_ = node_->now();
+    //     if (last_slam_time_.seconds() == 0){
+    //         last_slam_time_ = now_;
+    //         return;
+    //     }
+
+    //     double dt = (now_ - last_slam_time_).seconds();
+    //     last_slam_time_ = now_;
+
+    //     imu_acc_.z() -= 9.81;
+
+    //     integrated_v_imu_ += imu_acc_ * dt;
+    //     // Calculate the difference in magnitude
+    //     double diff = (latest_slam_v_ - integrated_v_imu_).norm();
+    //     double angle = 0.0;
+    //     if (latest_slam_v_.norm() > 1e-3 && integrated_v_imu_.norm() > 1e-3) {
+    //         double cos_angle = latest_slam_v_.normalized().dot(integrated_v_imu_.normalized());
+    //         cos_angle = std::clamp(cos_angle, -1.0, 1.0);
+    //         angle = std::acos(cos_angle) * 180.0 / M_PI;
+    //     }
+
+    //     if (diff > maxSpeeddiff_ && angle > maxAnglediff_)
+    //     {
+    //         setHealthy(false);
+    //         RCLCPP_WARN(node_->get_logger(), "[SLAM source] speed difference = %f, angle = %f", diff, angle);
+    //     }else {
+    //         setHealthy(true);
+    //     }
+    // }
 
     
 }
@@ -302,14 +364,23 @@ void SLAM::setRestartquest(bool restart) {
 void SLAM::setImudata(const Eigen::Vector3d& linearAcceleration,
                       const Eigen::Vector3d& angularVelocity,
                       const Eigen::Quaterniond& orientation) {
-    imu_acc_ = linearAcceleration;
-    imu_gyro_ = angularVelocity;
-    imu_orientation_ = orientation;
+    // buffer
+    // imu_acc_ = linearAcceleration;
+    // imu_gyro_ = angularVelocity;
+    // imu_orientation_ = orientation;
+
+    const double t = node_->now().seconds();
+    std::lock_guard<std::mutex> lk(imu_mtx_);
+    if (!imu_buf_.empty() && t < imu_buf_.back().t) {
+        return; 
+    }
+    imu_buf_.push_back(ImuLite{t, linearAcceleration, orientation});
+    if (imu_buf_.size() > imu_buf_max_) imu_buf_.pop_front();
 
     if (last_propagate_time_.seconds() == 0){
         last_propagate_time_ = node_->now();
-        latest_slam_acc_0 = imu_acc_;
-        latest_slam_gyr_0 = imu_gyro_;
+        latest_slam_acc_0 = linearAcceleration;
+        latest_slam_gyr_0 = angularVelocity;
         return;
     }
 
@@ -322,14 +393,14 @@ void SLAM::setImudata(const Eigen::Vector3d& linearAcceleration,
         return;
     }
     Eigen::Vector3d un_slam_acc_0 = latest_slam_q_ *(latest_slam_acc_0 - latest_Ba_) - g_;
-    Eigen::Vector3d un_slam_gyr = 0.5 * (latest_slam_gyr_0 + imu_gyro_) - latest_Bg_;
+    Eigen::Vector3d un_slam_gyr = 0.5 * (latest_slam_gyr_0 + angularVelocity) - latest_Bg_;
     latest_slam_q_ = latest_slam_q_ * deltaQ(un_slam_gyr * dt_slam);
-    Eigen::Vector3d un_slam_acc_1 = latest_slam_q_ *(imu_acc_ - latest_Ba_) - g_;
+    Eigen::Vector3d un_slam_acc_1 = latest_slam_q_ *(linearAcceleration - latest_Ba_) - g_;
     Eigen::Vector3d un_slam_acc = 0.5 * (un_slam_acc_0 + un_slam_acc_1);
     latest_slam_p_ = latest_slam_p_ + latest_slam_v_ * dt_slam + 0.5 * un_slam_acc * dt_slam * dt_slam;
     latest_slam_v_ = latest_slam_v_ + un_slam_acc * dt_slam;
-    latest_slam_acc_0 = imu_acc_;
-    latest_slam_gyr_0 = imu_gyro_;
+    latest_slam_acc_0 = linearAcceleration;
+    latest_slam_gyr_0 = angularVelocity;
 
     setCurrPose(latest_slam_p_, latest_slam_v_, latest_slam_q_); // update current pose
 }

@@ -10,6 +10,8 @@ double normalizeAngle(double angle);
 
 Eigen::Matrix3d Rz(double yaw);
 
+double clamp1_(double x);
+
 struct NavState {
     Eigen::Vector3d p{Eigen::Vector3d::Zero()};
     Eigen::Vector3d v{Eigen::Vector3d::Zero()};
@@ -37,4 +39,10 @@ struct NavState {
         msg.twist.twist.angular.z = a.z();
         return msg;
     }
+};
+
+struct ImuLite {
+    double t;                 // s
+    Eigen::Vector3d acc;      // m/s^2
+    Eigen::Quaterniond ori;   
 };

@@ -30,3 +30,6 @@ double normalizeAngle(double angle) {
 Eigen::Matrix3d Rz(double yaw) {
     return Eigen::AngleAxisd(yaw, Eigen::Vector3d::UnitZ()).toRotationMatrix();
 }
+double clamp1_(double x) { 
+    return std::max(-1.0, std::min(1.0, x)); 
+}

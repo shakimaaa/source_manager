@@ -34,6 +34,9 @@ public:
     void setOffset(const Eigen::Vector3d& p, const Eigen::Quaterniond& q, double yaw) override;
     bool canRestart() override;
     void restartSource() override;
+    // bool extractImuInterval_(double t0, double t1, std::vector<ImuLite>& out) override;
+    // ImuLite interpImu_(const ImuLite& a, const ImuLite& b, double t) override;
+    // void integrateIntervalMidpoint_(const std::vector<ImuLite>& seg, Eigen::Vector3d& dvel_imu) override;
 
     void setGpsdata();
     void setOdometry();
@@ -49,9 +52,9 @@ private:
     NavState odom_data_;
     NavState propageted_data_;
 
-    Eigen::Vector3d imu_acc_ = Eigen::Vector3d::Zero();
-    Eigen::Vector3d imu_gyro_ = Eigen::Vector3d::Zero();
-    Eigen::Quaterniond imu_orientation_ = Eigen::Quaterniond::Identity();
+    // Eigen::Vector3d imu_acc_ = Eigen::Vector3d::Zero();
+    // Eigen::Vector3d imu_gyro_ = Eigen::Vector3d::Zero();
+    // Eigen::Quaterniond imu_orientation_ = Eigen::Quaterniond::Identity();
 
     // Just received  gps data
     Eigen::Vector3d r_gps_p_ = Eigen::Vector3d::Zero();

@@ -106,6 +106,7 @@ void SourceManager::onSetRestartReq(const std::shared_ptr<std_srvs::srv::SetBool
 }
 
 void SourceManager::restartCheck() {
+    // xie cheng yige
     if (restart_srv || slam_source_->canRestart()) {
         slam_source_->setRestartOffset(current_propagate_state_);
         std::thread([this]() {
@@ -123,10 +124,12 @@ void SourceManager::restartCheck() {
 }
 
 void SourceManager::raisePriority(SourceBase::State target) {
+    // mutx
     auto it = std::find(priority_source_.begin(), priority_source_.end(), target);
     if (it != priority_source_.end()) {
         priority_source_.erase(it);
     }
+    
     priority_source_.insert(priority_source_.begin(), target);
 }
 

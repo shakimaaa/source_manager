@@ -40,6 +40,11 @@ public:
     NavState getPropagateOdometry() const override;
     bool canRestart() override;
     void restartSource() override;
+
+    // bool extractImuInterval_(double t0, double t1, std::vector<ImuLite>& out) override;
+    // ImuLite interpImu_(const ImuLite& a, const ImuLite& b, double t) override;
+    // void integrateIntervalMidpoint_(const std::vector<ImuLite>& seg, Eigen::Vector3d& dvel_imu) override;
+
     
     
 
@@ -60,9 +65,9 @@ private:
     NavState odom_data_;
     NavState propageted_data_;
 
-    Eigen::Vector3d imu_acc_ = Eigen::Vector3d::Zero();
-    Eigen::Vector3d imu_gyro_ = Eigen::Vector3d::Zero();
-    Eigen::Quaterniond imu_orientation_ = Eigen::Quaterniond::Identity();
+    // Eigen::Vector3d imu_acc_ = Eigen::Vector3d::Zero();
+    // Eigen::Vector3d imu_gyro_ = Eigen::Vector3d::Zero();
+    // Eigen::Quaterniond imu_orientation_ = Eigen::Quaterniond::Identity();
 
     // Just received slam data
     Eigen::Vector3d r_slam_p_ = Eigen::Vector3d::Zero();
@@ -71,11 +76,6 @@ private:
     Eigen::Quaterniond r_slam_q_ = Eigen::Quaterniond::Identity();
     double r_slam_yaw_ = 0.0;
 
-    // for slam odometry
-    Eigen::Vector3d slam_odom_p{Eigen::Vector3d::Zero()};
-    Eigen::Vector3d slam_odom_v{Eigen::Vector3d::Zero()};
-    Eigen::Vector3d slam_odom_a{Eigen::Vector3d::Zero()};
-    Eigen::Quaterniond slam_odom_q{Eigen::Quaterniond::Identity()};
 
     // latest slam data
     Eigen::Vector3d latest_slam_p_ = Eigen::Vector3d::Zero();
@@ -97,10 +97,10 @@ private:
     // imu propagate
     Eigen::Vector3d latest_slam_acc_0 = Eigen::Vector3d::Zero();
     Eigen::Vector3d latest_slam_gyr_0 = Eigen::Vector3d::Zero();
-    Eigen::Vector3d g_ = Eigen::Vector3d(0, 0, 9.81); // Gravity constant
+    // Eigen::Vector3d g_ = Eigen::Vector3d(0, 0, 9.81); // Gravity constant
 
     // 积分
-    Eigen::Vector3d integrated_v_imu_ = Eigen::Vector3d::Zero();
+    // Eigen::Vector3d integrated_v_imu_ = Eigen::Vector3d::Zero();
     double maxSpeeddiff_ = 3.0;
     double maxAnglediff_ = 100.0;
 
@@ -115,7 +115,7 @@ private:
     rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr srv_set_restart_req_;
     bool restart_srv = false;
     bool restart_requested_ = false;
-    bool is_received_message_ = true;
+    bool is_received_message_ = false;
     rclcpp::Time unhealthy_start_time_;
 
     bool SLAM_healthy_ = false;
