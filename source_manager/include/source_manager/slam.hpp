@@ -1,3 +1,6 @@
+#pragma once
+
+
 #include "source_manager/source.hpp"
 #include "source_manager/util.hpp"
 #include <rclcpp/rclcpp.hpp>
@@ -115,6 +118,7 @@ private:
     rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr srv_set_restart_req_;
     bool restart_srv = false;
     bool restart_requested_ = false;
+    bool runing = false;
     bool is_received_message_ = false;
     rclcpp::Time unhealthy_start_time_;
 

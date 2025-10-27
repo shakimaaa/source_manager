@@ -59,6 +59,10 @@ void GPS::setOffset(const Eigen::Vector3d& p, const Eigen::Quaterniond& q, doubl
     gps_offset_p_ = p;
     gps_offset_q_ = q;
     gps_offset_yaw_ = yaw;
+    latest_gps_q_ = (gps_offset_q_ * r_gps_q_).normalized();
+    latest_gps_p_ = (latest_gps_q_ * r_gps_p_) + gps_offset_p_;
+    latest_gps_yaw_ = r_gps_yaw_ + gps_offset_yaw_;
+    RCLCPP_INFO(node_->get_logger(), "[gps source] set offset");
 }
 
 void GPS::setOdometry() {
@@ -71,8 +75,9 @@ void GPS::setOdometry() {
 }
 void GPS::setGpsdata() {
 
-    latest_gps_p_ = r_gps_p_ + gps_offset_p_;
-    latest_gps_q_ = r_gps_q_ * gps_offset_q_;
+    
+    latest_gps_q_ = (gps_offset_q_ * r_gps_q_).normalized();
+    latest_gps_p_ = (latest_gps_q_ * r_gps_p_) + gps_offset_p_;
     latest_gps_v_ = r_gps_v_ ;
     latest_gps_a_ = r_gps_a_ ;
     latest_gps_yaw_ = r_gps_yaw_ + gps_offset_yaw_;
@@ -83,6 +88,7 @@ void GPS::setCurrPose(const Eigen::Vector3d& pos, const Eigen::Vector3d& vel, co
     propageted_data_.p = pos;
     propageted_data_.v = vel;
     propageted_data_.q = q;
+    propageted_data_.yaw = latest_gps_yaw_;
 }
 
 NavState GPS::getPropagateOdometry() const {
@@ -95,7 +101,7 @@ NavState GPS::getOdometry() const {
 
 
 void GPS::gpsCallback(const nav_msgs::msg::Odometry::SharedPtr msg) {
-    RCLCPP_INFO(node_->get_logger(), "[GPS source] data received");
+    // RCLCPP_INFO(node_->get_logger(), "[GPS source] data received");
 
      
     // if (!gpsOdomIsValid(*msg)) {
@@ -123,11 +129,11 @@ void GPS::gpsCallback(const nav_msgs::msg::Odometry::SharedPtr msg) {
     r_gps_yaw_ = std::atan2(2.0*(r_gps_q_.w()*r_gps_q_.z() + r_gps_q_.x()*r_gps_q_.y()),
                         1.0 - 2.0*(r_gps_q_.y()*r_gps_q_.y() + r_gps_q_.z()*r_gps_q_.z()));
     
-    RCLCPP_INFO(node_->get_logger(), "[GPS source] received yaw: %f", r_gps_yaw_);
-    RCLCPP_INFO(node_->get_logger(), "[GPS source] received pos: [%f, %f, %f], vel: [%f, %f, %f], q: [%f, %f, %f, %f]", 
-        r_gps_p_(0), r_gps_p_(1), r_gps_p_(2),
-        r_gps_v_(0), r_gps_v_(1), r_gps_v_(2),
-        r_gps_q_.w(), r_gps_q_.x(), r_gps_q_.y(), r_gps_q_.z());
+    // RCLCPP_INFO(node_->get_logger(), "[GPS source] received yaw: %f", r_gps_yaw_);
+    // RCLCPP_INFO(node_->get_logger(), "[GPS source] received pos: [%f, %f, %f], vel: [%f, %f, %f], q: [%f, %f, %f, %f]", 
+    //     r_gps_p_(0), r_gps_p_(1), r_gps_p_(2),
+    //     r_gps_v_(0), r_gps_v_(1), r_gps_v_(2),
+    //     r_gps_q_.w(), r_gps_q_.x(), r_gps_q_.y(), r_gps_q_.z());
     // RCLCPP_INFO(node_->get_logger(),
     //     "r_gps_p_: %.3f, %.3f, %.3f\n"
     //     "r_gps_v_: %.3f, %.3f, %.3f\n"
@@ -140,7 +146,7 @@ void GPS::gpsCallback(const nav_msgs::msg::Odometry::SharedPtr msg) {
 
     setGpsdata();
 
-    rclcpp::Time this_stamp = msg->header.stamp;
+    rclcpp::Time this_stamp = node_->get_clock()->now();
     if (curr_odom_stamp_.nanoseconds() != 0) {
         last_odom_stamp_ = curr_odom_stamp_;
         last_odom_state_ = curr_odom_state_;
@@ -172,6 +178,7 @@ void GPS::timerCallback() {
     const double t1 = curr_odom_stamp_.seconds();
 
     if (t1 <= t0) {
+        RCLCPP_WARN(node_->get_logger(),"t1 <= t0");
         odom_pending_compare_.store(false);
         return;
     }
@@ -179,6 +186,7 @@ void GPS::timerCallback() {
     std::vector<ImuLite> seg;
     if (!extractImuInterval_(t0, t1, seg)) {
         // Insufficient IMU samples, skip this time and wait for next time
+        RCLCPP_WARN(node_->get_logger(),"do not extractImuInterval_");
         odom_pending_compare_.store(false);
         return;
     }

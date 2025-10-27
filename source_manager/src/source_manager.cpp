@@ -3,7 +3,7 @@
 SourceManager::SourceManager() : Node("SourceManager")
 {
 
-    this->declare_parameter<std::vector<int64_t>>("manager.priority_source", std::vector<int64_t>{2, 1});
+    this->declare_parameter<std::vector<int64_t>>("manager.priority_source", std::vector<int64_t>{2, 1, 0});
 
     this->get_parameter("manager.priority_source", pri_raw);
     priority_source_.clear();
@@ -237,21 +237,23 @@ void SourceManager::onSwitchSource(const std::shared_ptr<xion_msg::srv::SwitchSo
 // }
 
 void SourceManager::checkSourceHealth() {
-    const bool gps_healthy = gps_source_ ? gps_source_->isHealthy() : false;
-    const bool slam_healthy = slam_source_ ? slam_source_->isHealthy() : false;
+    const bool gps_healthy = gps_source_->isHealthy();
+    const bool slam_healthy = slam_source_->isHealthy();
 
-    SourceBase::State state = SourceBase::State::UNINIT;
+    // SourceBase::State state = SourceBase::State::UNINIT;
 
     auto healthy = [&](SourceBase::State s)->bool {
         switch (s) {
             case SourceBase::State::GPS: return gps_healthy;
             case SourceBase::State::SLAM: return slam_healthy;
+            case SourceBase::State::UNINIT: return true;
             default: return false;
         }
     };
 
     for (auto s : priority_source_) {
         if (healthy(s)) {
+            // std::cout<< "11111111111" <<std::endl;
             state = s;
             break;
         }
@@ -290,7 +292,7 @@ void SourceManager::update() {
 
 void SourceManager::changeSourceType() {
     if (active_source_ != previous_source_ && previous_source_ != SourceBase::State::UNINIT) {
-        RCLCPP_INFO(this->get_logger(), "State changed to: %d", static_cast<int>(active_source_));
+        RCLCPP_INFO(this->get_logger(), "State from %s changed to: %s", stateToString(previous_source_), stateToString(active_source_));
         is_state_changed_ = true;
     }
 
@@ -302,18 +304,31 @@ void SourceManager::changeSourceType() {
         if (previous_source == nullptr || current_source == nullptr) {
             previous_source_ = active_source_;
             is_state_changed_ = false;
+            RCLCPP_INFO(this->get_logger(),"previous_source == nullptr || current_source == nullptr");
             return;
         }
-        auto odom = previous_source->getOdometry();
+        auto pre_odom = previous_source->getPropagateOdometry();
+        auto curr_odom = current_source->getPropagateOdometry();
 
-        const Eigen::Vector3d pos = odom.p;
-        const double yaw = odom.yaw;
+        const Eigen::Vector3d pos = pre_odom.p;
+        const double yaw = pre_odom.yaw;
         //const Eigen::Quaterniond q = odom.q;
         
-        double yaw_offset = normalizeAngle(current_propagate_state_.yaw - yaw);
+        // double yaw_offset = normalizeAngle(curr_odom.yaw - yaw);
+        double yaw_offset = normalizeAngle(yaw - curr_odom.yaw);
         Eigen::Quaterniond q_offset (Rz(yaw_offset));
-        Eigen::Vector3d pos_offset = (current_propagate_state_.p - Rz(yaw_offset) * pos);
+        q_offset.normalize();
+        // std::cout << curr_odom.p << std::endl;
+        // std::cout << Rz(yaw_offset) * pos << std::endl;
+        // Eigen::Vector3d pos_offset = (curr_odom.p - Rz(yaw_offset) * pos);
+        Eigen::Vector3d pos_offset = (pos - q_offset * curr_odom.p);
+        
         current_source->setOffset(pos_offset, q_offset, yaw_offset);
+
+        position_target_ = getSource(active_source_)->getPropagateOdometry().p;
+        position_start_ = getSource(previous_source_)->getPropagateOdometry().p;
+        orientation_target_ = getSource(active_source_)->getPropagateOdometry().q;
+        orientation_start_ = getSource(previous_source_)->getPropagateOdometry().q;
 
         transition_start_time_ = this->now();
         is_transitioning_ = true;
@@ -323,10 +338,12 @@ void SourceManager::changeSourceType() {
 }
 
 void SourceManager::interpolationFilter() {
+    if (active_source_ == SourceBase::State::UNINIT) return;
     if (is_transitioning_) {
         rclcpp::Duration elapsed = this->now() - transition_start_time_;
         const auto trans = rclcpp::Duration::from_seconds(transition_duration_sec_);
 
+        
         if (elapsed > trans) {
             current_propagate_state_.p = position_target_;
             current_propagate_state_.q = orientation_target_;
@@ -360,7 +377,7 @@ void SourceManager::publishPropagateOdometry() {
     // RCLCPP_INFO(this->get_logger(), "imu_propagate pose: [%f %f %f] vel: [%f %f %f], q: [%f %f %f %f] ", 
     //    propagated_odometry.pose.pose.position.x, propagated_odometry.pose.pose.position.y, propagated_odometry.pose.pose.position.z,
     //    propagated_odometry.twist.twist.linear.x, propagated_odometry.twist.twist.linear.y, propagated_odometry.twist.twist.linear.z,
-     //   propagated_odometry.pose.pose.orientation.w, propagated_odometry.pose.pose.orientation.x, propagated_odometry.pose.pose.orientation.y, propagated_odometry.pose.pose.orientation.z);
+    //    propagated_odometry.pose.pose.orientation.w, propagated_odometry.pose.pose.orientation.x, propagated_odometry.pose.pose.orientation.y, propagated_odometry.pose.pose.orientation.z);
     propagate_odometry_pub_->publish(propagated_odometry);
 }
 

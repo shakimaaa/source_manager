@@ -29,4 +29,5 @@ private:
     Eigen::Vector3d imu_angular_velocity_;
 
     int fix_type_ = 0;
+    bool not_pub = false;
 };

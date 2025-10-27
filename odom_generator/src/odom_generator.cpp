@@ -18,13 +18,17 @@ OdomGenerator::OdomGenerator() : Node("odom_generator") {
 
 void OdomGenerator::gpsCallback(const xion_msg::msg::GlobalPositionInt::SharedPtr msg) {
     // Check if the GPS data is valid.
+    not_pub = false;
     if (msg->lat == 0) {
+        not_pub = true;
         RCLCPP_WARN(this->get_logger(), "GPS NOT READY");
         return;
     }
 
-    if (msg->gps_status < 3) {
+
+    if (msg->gps_status < 3 || msg->gps_eph > 1.1) {
         RCLCPP_WARN(this->get_logger(), "fix_type <3, Invalid GPS data");
+        not_pub = true;
         if (origin_set_) {
             origin_set_ = false;
             RCLCPP_INFO(this->get_logger(), "Origin reset");
@@ -141,7 +145,8 @@ void OdomGenerator::gpsCallback(const xion_msg::msg::GlobalPositionInt::SharedPt
         // -----------------------------------
         // Publish the odometry message in the ENU frame.
         // -----------------------------------
-        odom_pub_->publish(odom_msg);
+        if (!not_pub)
+            odom_pub_->publish(odom_msg);
     }
 
 void OdomGenerator::imuCallback(const sensor_msgs::msg::Imu::SharedPtr msg) {

@@ -3,8 +3,8 @@
 SLAM::SLAM(rclcpp::Node::SharedPtr node)
     : SourceBase(std::move(node)) {
 
-    node_->declare_parameter("slam.maxSpeeddiff", 40.0);
-    node_->declare_parameter("slam.maxAnglediff", 200.0);
+    node_->declare_parameter("slam.maxSpeeddiff", 0.25);
+    node_->declare_parameter("slam.maxAnglediff", 60.0);
     node_->declare_parameter("slam.restart_time_threshold", 3.0);
     node_->declare_parameter("slam.canrestart", true);
 
@@ -143,7 +143,14 @@ void SLAM::setOffset(const Eigen::Vector3d& p, const Eigen::Quaterniond& q, doub
     slam_offset_p_ = p;
     slam_offset_q_ = q;
     slam_offset_yaw_ = yaw;
-}
+    latest_slam_q_ = (slam_offset_q_ * r_slam_q_).normalized();
+    latest_slam_p_ = (latest_slam_q_ * r_slam_p_) + slam_offset_p_;
+    latest_slam_yaw_ = r_slam_yaw_ + slam_offset_yaw_;
+    setOdometry();
+    // RCLCPP_INFO(node_->get_logger(), "[slam source] set offset");
+    // std::cout << slam_offset_p_ <<std::endl;
+    // std::cout <<"offset" << latest_slam_p_ << std::endl;
+} 
 
 void SLAM::setOdometry() {
     odom_data_.p = latest_slam_p_;
@@ -154,8 +161,9 @@ void SLAM::setOdometry() {
 }
 
 void SLAM::setSlamdata() {
-    latest_slam_p_ = r_slam_p_ + slam_offset_p_ + restart_offset_p_;
-    latest_slam_q_ = r_slam_q_ * slam_offset_q_ * restart_offset_q_;
+    
+    latest_slam_q_ = (restart_offset_q_ * slam_offset_q_ * r_slam_q_).normalized();
+    latest_slam_p_ = (latest_slam_q_*r_slam_p_) + slam_offset_p_ + restart_offset_p_;
     latest_slam_v_ = r_slam_v_;
     latest_slam_a_ = r_slam_a_;
     latest_slam_yaw_ = r_slam_yaw_ + slam_offset_yaw_ + restart_offset_yaw_;
@@ -185,7 +193,7 @@ NavState SLAM::getPropagateOdometry() const {
 
 void SLAM::slamCallback(const xion_msg::msg::ExtendedOdometry::SharedPtr msg) 
 {
-    RCLCPP_INFO(node_->get_logger(), "[SLAM source] data received");
+    // RCLCPP_INFO(node_->get_logger(), "[SLAM source] data received");
     if (!msg){
         RCLCPP_WARN(node_->get_logger(), "[SLAM source] data is null");
         setHealthy(false);
@@ -217,15 +225,15 @@ void SLAM::slamCallback(const xion_msg::msg::ExtendedOdometry::SharedPtr msg)
     latest_Bg_ << msg->bgs.x,
                 msg->bgs.y,
                 msg->bgs.z;
-    RCLCPP_INFO(node_->get_logger(), "[SLAM source] received yaw: %f", r_slam_yaw_);
-    RCLCPP_INFO(node_->get_logger(), "[SLAM source] received pos: [%f, %f, %f], vel: [%f, %f, %f], q: [%f, %f, %f, %f]", 
-        r_slam_p_(0), r_slam_p_(1), r_slam_p_(2),
-        r_slam_v_(0), r_slam_v_(1), r_slam_v_(2),
-        r_slam_q_.w(), r_slam_q_.x(), r_slam_q_.y(), r_slam_q_.z());
+    // RCLCPP_INFO(node_->get_logger(), "[SLAM source] received yaw: %f", r_slam_yaw_);
+    // RCLCPP_INFO(node_->get_logger(), "[SLAM source] received pos: [%f, %f, %f], vel: [%f, %f, %f], q: [%f, %f, %f, %f]", 
+    //     r_slam_p_(0), r_slam_p_(1), r_slam_p_(2),
+    //     r_slam_v_(0), r_slam_v_(1), r_slam_v_(2),
+    //     r_slam_q_.w(), r_slam_q_.x(), r_slam_q_.y(), r_slam_q_.z());
     
     setSlamdata();
 
-    rclcpp::Time this_stamp = msg->header.stamp;
+    rclcpp::Time this_stamp = node_->get_clock()->now();
     if (curr_odom_stamp_.nanoseconds() != 0) {
         last_odom_stamp_ = curr_odom_stamp_;
         last_odom_state_ = curr_odom_state_;
@@ -254,16 +262,19 @@ void SLAM::timerCallback() {
 
     if (!odom_pending_compare_.load()) return;
 
+    // std::cout << " 2" <<std::endl;
     const double t0 = last_odom_stamp_.seconds();
     const double t1 = curr_odom_stamp_.seconds();
 
     if (t1 <= t0) {
         odom_pending_compare_.store(false);
+        RCLCPP_WARN(node_->get_logger(),"t1 <= t0");
         return;
     }
 
     std::vector<ImuLite> seg;
     if (!extractImuInterval_(t0, t1, seg)) {
+        RCLCPP_WARN(node_->get_logger(),"not extractImuInterval_");
         // Insufficient IMU samples, skip this time and wait for next time
         odom_pending_compare_.store(false);
         return;
@@ -281,6 +292,7 @@ void SLAM::timerCallback() {
         c = std::clamp(c, -1.0, 1.0);
         angle = std::acos(c) * 180.0 / M_PI;
     }
+    RCLCPP_WARN(node_->get_logger(), "speed difference = %f, angle = %f", diff, angle);
     if (diff > maxSpeeddiff_ && angle > maxAnglediff_) {
         setHealthy(false);
         RCLCPP_WARN(node_->get_logger(), "speed difference = %f, angle = %f", diff, angle);
@@ -368,7 +380,7 @@ void SLAM::setImudata(const Eigen::Vector3d& linearAcceleration,
     // imu_acc_ = linearAcceleration;
     // imu_gyro_ = angularVelocity;
     // imu_orientation_ = orientation;
-
+    if(restarting_) return;
     const double t = node_->now().seconds();
     std::lock_guard<std::mutex> lk(imu_mtx_);
     if (!imu_buf_.empty() && t < imu_buf_.back().t) {
@@ -410,7 +422,9 @@ bool SLAM::isHealthy() {
     double dt = (now_ - last_get_slam_time_).seconds();
     // RCLCPP_INFO(node_->get_logger(), "time diff = %f", dt);
     if (dt > 1.0) {
-        // RCLCPP_WARN(node_->get_logger(), "SLAM data empty.");
+        // RCLCPP_INFO(node_->get_logger(), "time diff = %f", dt);
+        RCLCPP_WARN(node_->get_logger(), "SLAM data empty.");
+        is_received_message_ = false;
         return false;
     }
     is_received_message_ = true;

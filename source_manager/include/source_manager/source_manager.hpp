@@ -53,6 +53,7 @@ private:
     // =========================
     // Smooth Transition Support
     // =========================
+    SourceBase::State state = SourceBase::State::UNINIT;
     rclcpp::Time transition_start_time_;
     bool is_transitioning_ = false;
     // Duration of transition in seconds (1.0 means 1 second)
@@ -72,7 +73,7 @@ private:
     SourceBase::State previous_source_ = SourceBase::State::UNINIT;
 
     std::vector<int64_t> pri_raw;
-    std::vector<SourceBase::State> priority_source_{SourceBase::State::GPS,  SourceBase::State::SLAM};  // 0: UNINIT, 1:SLAM, 2:GPS
+    std::vector<SourceBase::State> priority_source_{SourceBase::State::GPS,  SourceBase::State::SLAM, SourceBase::State::UNINIT};  // 0: UNINIT, 1:SLAM, 2:GPS
 
     NavState current_propagate_state_;
     NavState current_odometry_state_;

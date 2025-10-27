@@ -96,7 +96,7 @@ void SourceBase::integrateIntervalMidpoint_(const std::vector<ImuLite>& seg, Eig
         Eigen::Vector3d acc_mid = 0.5 * (seg[i-1].acc + seg[i].acc);
         Eigen::Quaterniond q_mid = seg[i-1].ori.slerp(0.5, seg[i].ori).normalized();
         Eigen::Vector3d a_world = q_mid * acc_mid - g_;  // 用统一的 g_ 去重力
-        if (a_world.norm() < 0.2) continue;              // 小加速度门限，抑制零偏（可参照 a_gate_thresh_）
+        if (a_world.norm() < 0.2) continue;              // 抑制零偏
         dvel_imu += a_world * dt;
     }
 }
