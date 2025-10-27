@@ -30,7 +30,7 @@ SourceManager::SourceManager() : Node("SourceManager")
         "/imu_propagate_", rclcpp::QoS(10).best_effort().durability_volatile());
 
     odometry_pub_ = this->create_publisher<nav_msgs::msg::Odometry>(
-        "/odometry_",1000);
+        "/odometry_",10);
     
     path_pub_ = this->create_publisher<nav_msgs::msg::Path>(
         "/path_",1000);

@@ -62,7 +62,7 @@ void GPS::setOffset(const Eigen::Vector3d& p, const Eigen::Quaterniond& q, doubl
     latest_gps_q_ = (gps_offset_q_ * r_gps_q_).normalized();
     latest_gps_p_ = (latest_gps_q_ * r_gps_p_) + gps_offset_p_;
     latest_gps_yaw_ = r_gps_yaw_ + gps_offset_yaw_;
-    RCLCPP_INFO(node_->get_logger(), "[gps source] set offset");
+    RCLCPP_INFO(node_->get_logger(), "[GPS source] set offset");
 }
 
 void GPS::setOdometry() {
@@ -186,7 +186,7 @@ void GPS::timerCallback() {
     std::vector<ImuLite> seg;
     if (!extractImuInterval_(t0, t1, seg)) {
         // Insufficient IMU samples, skip this time and wait for next time
-        RCLCPP_WARN(node_->get_logger(),"do not extractImuInterval_");
+        RCLCPP_WARN(node_->get_logger(),"[GPS source] do not extractImuInterval_");
         odom_pending_compare_.store(false);
         return;
     }
@@ -203,10 +203,10 @@ void GPS::timerCallback() {
         c = std::clamp(c, -1.0, 1.0);
         angle = std::acos(c) * 180.0 / M_PI;
     }
-    RCLCPP_WARN(node_->get_logger(), "speed difference = %f, angle = %f", diff, angle);
+    RCLCPP_WARN(node_->get_logger(), "[GPS source] speed difference = %f, angle = %f", diff, angle);
     if (diff > maxSpeeddiff_ && angle > maxAnglediff_) {
         setHealthy(false);
-        RCLCPP_WARN(node_->get_logger(), "speed difference = %f, angle = %f", diff, angle);
+        RCLCPP_WARN(node_->get_logger(), "[GPS source] big difference :speed difference = %f, angle = %f", diff, angle);
     } else {
         //std::cout << "speed difference = " << diff << ", angle = " << angle << std::endl;
         setHealthy(true);
@@ -332,8 +332,9 @@ bool GPS::gpsOdomIsValid(const nav_msgs::msg::Odometry& o) {
 bool GPS::isHealthy() {
     rclcpp::Time now_ = node_->now();
     double dt = (now_ - last_get_gps_time_).seconds();
-    // RCLCPP_INFO(node_->get_logger(), "time diff = %f", dt);
+    // 
     if (dt > 1.0) {
+        RCLCPP_WARN(node_->get_logger(), "[GPS source] time diff = %f", dt);
         // RCLCPP_WARN(node_->get_logger(), "GPS data empty.");
         return false;
     }

@@ -30,4 +30,7 @@ private:
 
     int fix_type_ = 0;
     bool not_pub = false;
+
+    int min_fix_type = 3;
+    double max_hdop = 1.1;
 };

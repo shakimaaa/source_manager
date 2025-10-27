@@ -2,6 +2,10 @@
 
 
 OdomGenerator::OdomGenerator() : Node("odom_generator") {
+
+    min_fix_type = this->declare_parameter("min_fix_type", 3);
+    max_hdop = this->declare_parameter("max_hdop", 1.0);
+
     gps_sub_ = this->create_subscription<xion_msg::msg::GlobalPositionInt>(
         "/mav/global_position_int", rclcpp::QoS(100).best_effort(),
         std::bind(&OdomGenerator::gpsCallback, this, std::placeholders::_1));
@@ -26,7 +30,7 @@ void OdomGenerator::gpsCallback(const xion_msg::msg::GlobalPositionInt::SharedPt
     }
 
 
-    if (msg->gps_status < 3 || msg->gps_eph > 1.1) {
+    if (msg->gps_status < min_fix_type || msg->gps_eph > max_hdop) {
         RCLCPP_WARN(this->get_logger(), "fix_type <3, Invalid GPS data");
         not_pub = true;
         if (origin_set_) {

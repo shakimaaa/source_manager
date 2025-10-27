@@ -268,13 +268,13 @@ void SLAM::timerCallback() {
 
     if (t1 <= t0) {
         odom_pending_compare_.store(false);
-        RCLCPP_WARN(node_->get_logger(),"t1 <= t0");
+        RCLCPP_WARN(node_->get_logger(),"[SLAM source] t1 <= t0");
         return;
     }
 
     std::vector<ImuLite> seg;
     if (!extractImuInterval_(t0, t1, seg)) {
-        RCLCPP_WARN(node_->get_logger(),"not extractImuInterval_");
+        RCLCPP_WARN(node_->get_logger(),"[SLAM source] not extractImuInterval_");
         // Insufficient IMU samples, skip this time and wait for next time
         odom_pending_compare_.store(false);
         return;
@@ -292,10 +292,10 @@ void SLAM::timerCallback() {
         c = std::clamp(c, -1.0, 1.0);
         angle = std::acos(c) * 180.0 / M_PI;
     }
-    RCLCPP_WARN(node_->get_logger(), "speed difference = %f, angle = %f", diff, angle);
+    RCLCPP_WARN(node_->get_logger(), "[SLAM source] speed difference = %f, angle = %f", diff, angle);
     if (diff > maxSpeeddiff_ && angle > maxAnglediff_) {
         setHealthy(false);
-        RCLCPP_WARN(node_->get_logger(), "speed difference = %f, angle = %f", diff, angle);
+        RCLCPP_WARN(node_->get_logger(), "[SLAM source] big difference :speed difference = %f, angle = %f", diff, angle);
     } else {
         //std::cout << "speed difference = " << diff << ", angle = " << angle << std::endl;
         setHealthy(true);
@@ -401,7 +401,7 @@ void SLAM::setImudata(const Eigen::Vector3d& linearAcceleration,
 
     if (dt_slam <= 0.0 || dt_slam >1.0) 
     {
-        RCLCPP_WARN(node_->get_logger(), "Invalid slam dt = %f", dt_slam);
+        RCLCPP_WARN(node_->get_logger(), "[SLAM source] Invalid slam dt = %f", dt_slam);
         return;
     }
     Eigen::Vector3d un_slam_acc_0 = latest_slam_q_ *(latest_slam_acc_0 - latest_Ba_) - g_;
@@ -422,8 +422,8 @@ bool SLAM::isHealthy() {
     double dt = (now_ - last_get_slam_time_).seconds();
     // RCLCPP_INFO(node_->get_logger(), "time diff = %f", dt);
     if (dt > 1.0) {
-        // RCLCPP_INFO(node_->get_logger(), "time diff = %f", dt);
-        RCLCPP_WARN(node_->get_logger(), "SLAM data empty.");
+        RCLCPP_WARN(node_->get_logger(), "[SLAM source] time diff = %f", dt);
+        // RCLCPP_WARN(node_->get_logger(), "[SLAM source] SLAM data empty.");
         is_received_message_ = false;
         return false;
     }
