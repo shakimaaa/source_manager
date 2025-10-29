@@ -60,7 +60,10 @@ void GPS::setOffset(const Eigen::Vector3d& p, const Eigen::Quaterniond& q, doubl
     gps_offset_q_ = q;
     gps_offset_yaw_ = yaw;
     latest_gps_q_ = (gps_offset_q_ * r_gps_q_).normalized();
-    latest_gps_p_ = (latest_gps_q_ * r_gps_p_) + gps_offset_p_;
+    latest_gps_p_ = (gps_offset_q_ * r_gps_p_) + gps_offset_p_;
+    latest_gps_v_ = gps_offset_q_ * r_gps_v_;
+
+    // latest_gps_p_ = r_gps_p_ + gps_offset_p_;
     latest_gps_yaw_ = r_gps_yaw_ + gps_offset_yaw_;
     RCLCPP_INFO(node_->get_logger(), "[GPS source] set offset");
 }
@@ -77,8 +80,9 @@ void GPS::setGpsdata() {
 
     
     latest_gps_q_ = (gps_offset_q_ * r_gps_q_).normalized();
-    latest_gps_p_ = (latest_gps_q_ * r_gps_p_) + gps_offset_p_;
-    latest_gps_v_ = r_gps_v_ ;
+    latest_gps_p_ = (gps_offset_q_ * r_gps_p_) + gps_offset_p_;
+    // latest_gps_p_ =  r_gps_p_ + gps_offset_p_;
+    latest_gps_v_ = gps_offset_q_ * r_gps_v_ ;
     latest_gps_a_ = r_gps_a_ ;
     latest_gps_yaw_ = r_gps_yaw_ + gps_offset_yaw_;
     setOdometry();
@@ -152,6 +156,7 @@ void GPS::gpsCallback(const nav_msgs::msg::Odometry::SharedPtr msg) {
         last_odom_state_ = curr_odom_state_;
     } else {
         // first time，last=curr
+        integrated_v_imu_ = latest_gps_v_;
         last_odom_stamp_ = this_stamp;
         last_odom_state_.p = latest_gps_p_;
         last_odom_state_.v = latest_gps_v_;
@@ -192,7 +197,7 @@ void GPS::timerCallback() {
     }
     Eigen::Vector3d dvel_imu;
     integrateIntervalMidpoint_(seg, dvel_imu);
-    integrated_v_imu_ = last_odom_state_.v + dvel_imu;
+    integrated_v_imu_ += dvel_imu;
     const Eigen::Vector3d v_slam = curr_odom_state_.v;
 
     double diff = (v_slam - integrated_v_imu_).norm();

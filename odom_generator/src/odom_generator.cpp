@@ -30,13 +30,19 @@ void OdomGenerator::gpsCallback(const xion_msg::msg::GlobalPositionInt::SharedPt
     }
 
 
-    if (msg->gps_status < min_fix_type || msg->gps_eph > max_hdop) {
+    if (msg->gps_status < min_fix_type ) {
         RCLCPP_WARN(this->get_logger(), "fix_type <3, Invalid GPS data");
         not_pub = true;
         if (origin_set_) {
             origin_set_ = false;
             RCLCPP_INFO(this->get_logger(), "Origin reset");
         }
+        return;
+    }
+    if (msg->gps_eph > max_hdop)
+    {
+        RCLCPP_WARN(this->get_logger(), "hdop > %f", max_hdop);
+        not_pub = true;
         return;
     }
     // Set the origin if not already done.
@@ -90,11 +96,12 @@ void OdomGenerator::gpsCallback(const xion_msg::msg::GlobalPositionInt::SharedPt
     Eigen::Matrix3d R_enu = imu_orientation_.toRotationMatrix();
     double roll_enu = std::atan2(R_enu(2, 1), R_enu(2, 2));
     double pitch_enu = std::asin(-R_enu(2, 0));
+    double yaw_enu_ = std::atan2(R_enu(1,0), R_enu(0,0));
 
     // Step 4: Combine the GPS yaw (converted to ENU) with the IMU roll and pitch.
     // Note: The multiplication order here is important.
     Eigen::Quaterniond q_des =
-        Eigen::AngleAxisd(yaw_enu,       Eigen::Vector3d::UnitZ()) *
+        Eigen::AngleAxisd(yaw_enu_,       Eigen::Vector3d::UnitZ()) *
         Eigen::AngleAxisd(pitch_enu,     Eigen::Vector3d::UnitY()) *
         Eigen::AngleAxisd(roll_enu,      Eigen::Vector3d::UnitX());
     q_des.normalize();

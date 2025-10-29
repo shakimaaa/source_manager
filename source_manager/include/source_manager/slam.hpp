@@ -106,6 +106,7 @@ private:
     // Eigen::Vector3d integrated_v_imu_ = Eigen::Vector3d::Zero();
     double maxSpeeddiff_ = 3.0;
     double maxAnglediff_ = 100.0;
+    Eigen::Vector3d last_integrated_v_imu_ = Eigen::Vector3d::Zero();
 
     // restart
     rclcpp::Client<lifecycle_msgs::srv::ChangeState>::SharedPtr lifecycle_client_;

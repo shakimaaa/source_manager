@@ -144,8 +144,10 @@ void SLAM::setOffset(const Eigen::Vector3d& p, const Eigen::Quaterniond& q, doub
     slam_offset_q_ = q;
     slam_offset_yaw_ = yaw;
     latest_slam_q_ = (slam_offset_q_ * r_slam_q_).normalized();
-    latest_slam_p_ = (latest_slam_q_ * r_slam_p_) + slam_offset_p_;
+    latest_slam_p_ = (slam_offset_q_ * r_slam_p_) + slam_offset_p_;
+    // latest_slam_p_ = r_slam_p_ + slam_offset_p_;
     latest_slam_yaw_ = r_slam_yaw_ + slam_offset_yaw_;
+    latest_slam_v_ = slam_offset_q_ * r_slam_v_;
     setOdometry();
     // RCLCPP_INFO(node_->get_logger(), "[slam source] set offset");
     // std::cout << slam_offset_p_ <<std::endl;
@@ -163,8 +165,8 @@ void SLAM::setOdometry() {
 void SLAM::setSlamdata() {
     
     latest_slam_q_ = (restart_offset_q_ * slam_offset_q_ * r_slam_q_).normalized();
-    latest_slam_p_ = (latest_slam_q_*r_slam_p_) + slam_offset_p_ + restart_offset_p_;
-    latest_slam_v_ = r_slam_v_;
+    latest_slam_p_ = (restart_offset_q_ * slam_offset_q_* r_slam_p_) + slam_offset_p_ + restart_offset_p_;
+    latest_slam_v_ = restart_offset_q_ * slam_offset_q_* r_slam_v_;
     latest_slam_a_ = r_slam_a_;
     latest_slam_yaw_ = r_slam_yaw_ + slam_offset_yaw_ + restart_offset_yaw_;
     setOdometry();
@@ -239,6 +241,7 @@ void SLAM::slamCallback(const xion_msg::msg::ExtendedOdometry::SharedPtr msg)
         last_odom_state_ = curr_odom_state_;
     } else {
         // first time，last=curr
+        integrated_v_imu_ = latest_slam_v_;
         last_odom_stamp_ = this_stamp;
         last_odom_state_.p = latest_slam_p_;
         last_odom_state_.v = latest_slam_v_;
@@ -281,7 +284,7 @@ void SLAM::timerCallback() {
     }
     Eigen::Vector3d dvel_imu;
     integrateIntervalMidpoint_(seg, dvel_imu);
-    integrated_v_imu_ = last_odom_state_.v + dvel_imu;
+    integrated_v_imu_ +=  dvel_imu;
     const Eigen::Vector3d v_slam = curr_odom_state_.v;
 
     double diff = (v_slam - integrated_v_imu_).norm();

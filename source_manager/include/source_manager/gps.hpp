@@ -87,6 +87,7 @@ private:
     Eigen::Vector3d integrated_v_imu_ = Eigen::Vector3d::Zero();
     double maxSpeeddiff_ = 3.0;
     double maxAnglediff_ = 100.0;
+    Eigen::Vector3d last_integrated_v_imu_ = Eigen::Vector3d::Zero();
 
     bool gps_healthy_ = false;
     bool receiving_gps_ = false;
