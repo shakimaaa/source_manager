@@ -41,6 +41,7 @@ add_library(source_managerlib SHARED
   src/slam.cpp
   src/source_manager.cpp
   src/util.cpp
+  src/ekf.cpp
 )
 
 target_include_directories(source_managerlib

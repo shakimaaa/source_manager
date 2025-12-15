@@ -1,20 +1,37 @@
 #include "source_manager/source.hpp"
 
 SourceBase::SourceBase(std::shared_ptr<rclcpp::Node> node)
-: node_(std::move(node))
+: node_(std::move(node)),
+  ekf_(std::make_unique<SourceEKF>()),
+  initial_check_state_(InitialCheckState::PENDING)
 {
     // if (!node_) {
     //     RCLCPP_WARN(rclcpp::get_logger("SourceBase"), "SourceBase constructed with null node");
     // }
+    // Added parameters for stationary checks: speed threshold and check duration
+    if (!node_->has_parameter("source_base.stillness_velocity_threshold")) {
+        node_->declare_parameter<double>("source_base.stillness_velocity_threshold", 0.1);
+    }
+    if (!node_->has_parameter("source_base.stillness_check_duration")) {
+        node_->declare_parameter<double>("source_base.stillness_check_duration", 1.0);
+    }
+
+    node_->get_parameter("source_base.stillness_velocity_threshold", stillness_velocity_threshold_);
+    node_->get_parameter("source_base.stillness_check_duration", stillness_check_duration_);
+
+    auto clock = node_->get_clock();
+    stillness_check_start_time_ = rclcpp::Time(0, 0, clock->get_clock_type());
 }
 
 void SourceBase::setImudata(const Eigen::Vector3d& linearAcceleration,
                             const Eigen::Vector3d& angularVelocity,
-                            const Eigen::Quaterniond& orientation) {
+                            const Eigen::Quaterniond& orientation,
+                            const rclcpp::Time imu_time_stamp) {
 
     (void) linearAcceleration;
     (void) angularVelocity;
     (void) orientation;
+    (void) imu_time_stamp;
 }
 
 void SourceBase::setHealthy(bool healthy) {
@@ -37,7 +54,53 @@ void SourceBase::setOffset(const Eigen::Vector3d& p, const Eigen::Quaterniond& q
     (void)yaw;
 }
 
+void SourceBase::performInitialStillnessCheck(const Eigen::Vector3d& current_velocity) {
+    // Perform initial quiescence check state machine
+    switch (initial_check_state_) {
+        case InitialCheckState::PENDING:
+            // Receive data for the first time and start checking
+            RCLCPP_INFO(node_->get_logger(), "Starting initial stillness check for a source...");
+            initial_check_state_ = InitialCheckState::CHECKING;
+            stillness_check_start_time_ = node_->now();
+            stillness_check_velocities_.push_back(current_velocity);
+            setHealthy(false); // The source was unhealthy during the check
+            break;
+
+        case InitialCheckState::CHECKING:
+            // Collect speed data
+            stillness_check_velocities_.push_back(current_velocity);
+            if ((node_->now() - stillness_check_start_time_).seconds() > stillness_check_duration_) {
+                double total_speed = 0.0;
+                for (const auto& v : stillness_check_velocities_) {
+                    total_speed += v.norm();
+                }
+                double avg_speed = total_speed / stillness_check_velocities_.size();
+
+                // If the average speed is less than the threshold, the stationary check is passed
+                if (avg_speed < stillness_velocity_threshold_) {
+                    RCLCPP_INFO(node_->get_logger(), "Stillness check PASSED for a source (avg speed: %f m/s). Setting to healthy.", avg_speed);
+                    setHealthy(true);
+                } else {
+                    RCLCPP_WARN(node_->get_logger(), "Stillness check FAILED for a source (avg speed: %f m/s). Source remains unhealthy.", avg_speed);
+                    setHealthy(false); // Explicitly set to unhealthy
+                    init_check_false_restart = true;
+                }
+                initial_check_state_ = InitialCheckState::COMPLETE;
+                stillness_check_velocities_.clear(); // Clean data
+            }
+            break;
+
+        case InitialCheckState::COMPLETE:
+            // Check completed, do nothing
+            break;
+    }
+}
+
+
+
+// Integral correlation should be replaced by Kalman filtering, and integral should be deprecated
 ImuLite SourceBase::interpImu_(const ImuLite& a, const ImuLite& b, double t) {
+    // IMU Data linear interpolation
     ImuLite s;
     s.t = t;
     double u = (t - a.t) / std::max(1e-9, (b.t - a.t));
@@ -48,6 +111,7 @@ ImuLite SourceBase::interpImu_(const ImuLite& a, const ImuLite& b, double t) {
 }
 
 bool SourceBase::extractImuInterval_(double t0, double t1, std::vector<ImuLite>& out) {
+    // Extract IMU data within a specified time period and perform interpolation alignment
     if (t1 <= t0) return false;
 
     std::deque<ImuLite> buf;
@@ -57,7 +121,7 @@ bool SourceBase::extractImuInterval_(double t0, double t1, std::vector<ImuLite>&
         buf = imu_buf_;
     }
 
-    // find L0
+    // Find the left boundary L0, L1
     ImuLite L0 = buf.front(), L1 = buf.front();
     bool okL = false;
     for (size_t i=1; i<buf.size(); ++i) {
@@ -65,6 +129,7 @@ bool SourceBase::extractImuInterval_(double t0, double t1, std::vector<ImuLite>&
     }
     if (!okL) return false;
 
+    // Find the right boundary R0, R1
     ImuLite R0 = buf.front(), R1 = buf.front();
     bool okR = false;
     for (size_t i=1; i<buf.size(); ++i) {
@@ -73,6 +138,7 @@ bool SourceBase::extractImuInterval_(double t0, double t1, std::vector<ImuLite>&
     if (!okR) return false;
 
     out.clear();
+    // Interpolate to get exact boundary points
     ImuLite L = interpImu_(L0, L1, t0);
     ImuLite R = interpImu_(R0, R1, t1);
 
@@ -82,21 +148,23 @@ bool SourceBase::extractImuInterval_(double t0, double t1, std::vector<ImuLite>&
 
     std::sort(out.begin(), out.end(), [](auto& a, auto& b){ return a.t < b.t; });
     
+    // Remove duplicate elements
     out.erase(std::unique(out.begin(), out.end(),
-                [](auto& a, auto& b){ return std::abs(a.t-b.t) < 1e-9; }), out.end()); // Remove duplicate elements
+                [](auto& a, auto& b){ return std::abs(a.t-b.t) < 1e-9; }), out.end()); 
     return out.size() >= 2;
 
 }
 
 void SourceBase::integrateIntervalMidpoint_(const std::vector<ImuLite>& seg, Eigen::Vector3d& dvel_imu) {
+    // Median integration method to calculate speed increment
     dvel_imu.setZero();
     for (size_t i=1; i<seg.size(); ++i) {
         double dt = seg[i].t - seg[i-1].t;
         if (dt <= 0.0 || dt > 0.1) continue; 
         Eigen::Vector3d acc_mid = 0.5 * (seg[i-1].acc + seg[i].acc);
         Eigen::Quaterniond q_mid = seg[i-1].ori.slerp(0.5, seg[i].ori).normalized();
-        Eigen::Vector3d a_world = q_mid * acc_mid - g_;  // 用统一的 g_ 去重力
-        if (a_world.norm() < 0.2) continue;              // 抑制零偏
+        Eigen::Vector3d a_world = q_mid * acc_mid - g_;  // Degravity with uniform g_
+        if (a_world.norm() < 0.2) continue;              // Suppress zero offset
         dvel_imu += a_world * dt;
     }
 }

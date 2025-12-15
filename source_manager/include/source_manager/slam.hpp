@@ -34,7 +34,8 @@ public:
     explicit SLAM(rclcpp::Node::SharedPtr node);
     void setImudata(const Eigen::Vector3d& linearAcceleration,
                     const Eigen::Vector3d& angularVelocity,
-                    const Eigen::Quaterniond& orientation) override;
+                    const Eigen::Quaterniond& orientation,
+                    const rclcpp::Time imu_time_stamp) override;
     void setHealthy(bool healthy) override;
     void setCurrPose(const Eigen::Vector3d& pos, const Eigen::Vector3d& vel, const Eigen::Quaterniond& q) override;
     bool isHealthy() override;
@@ -78,7 +79,7 @@ private:
     Eigen::Vector3d r_slam_a_ = Eigen::Vector3d::Zero();
     Eigen::Quaterniond r_slam_q_ = Eigen::Quaterniond::Identity();
     double r_slam_yaw_ = 0.0;
-
+    rclcpp::Time timestamp;
 
     // latest slam data
     Eigen::Vector3d latest_slam_p_ = Eigen::Vector3d::Zero();
@@ -131,6 +132,7 @@ private:
     rclcpp::Time last_get_slam_time_;
     rclcpp::Time last_slam_time_;
     rclcpp::Time last_propagate_time_;
+    rclcpp::Time propagate_time_;
 
 
     void slamCallback(const xion_msg::msg::ExtendedOdometry::SharedPtr msg);

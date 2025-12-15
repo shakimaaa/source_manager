@@ -3,8 +3,10 @@
 SourceManager::SourceManager() : Node("SourceManager")
 {
 
+    // Declare source priority parameters, default order: GPS > SLAM > UNINIT
     this->declare_parameter<std::vector<int64_t>>("manager.priority_source", std::vector<int64_t>{2, 1, 0});
 
+    // Parse priority parameters
     this->get_parameter("manager.priority_source", pri_raw);
     priority_source_.clear();
     priority_source_.reserve(pri_raw.size());
@@ -14,6 +16,7 @@ SourceManager::SourceManager() : Node("SourceManager")
         else if (v == 2) priority_source_.push_back(SourceBase::State::GPS);
     }
 
+    // Print priority order
     std::string order;
     order.reserve(64);
     for (size_t i = 0; i < priority_source_.size(); ++i) {
@@ -22,10 +25,12 @@ SourceManager::SourceManager() : Node("SourceManager")
     }
     RCLCPP_INFO(this->get_logger(), "priority order: %s", order.c_str());
 
+    // Subscribe to IMU data
     imu_sub_ = this->create_subscription<sensor_msgs::msg::Imu>(
         "/mav/imu/data_raw", rclcpp::QoS(100).best_effort(),
         std::bind(&SourceManager::imuCallback, this, std::placeholders::_1));
 
+    // Release of propagation odometry (high frequency) and final fusion odometry
     propagate_odometry_pub_ = this->create_publisher<nav_msgs::msg::Odometry>(
         "/imu_propagate_", rclcpp::QoS(10).best_effort().durability_volatile());
 
@@ -35,6 +40,7 @@ SourceManager::SourceManager() : Node("SourceManager")
     path_pub_ = this->create_publisher<nav_msgs::msg::Path>(
         "/path_",1000);
     
+    // Create a service: switch source priority, set restart request
     switch_source_srv_ = create_service<xion_msg::srv::SwitchSourceType>(
         "switch_source",
         std::bind(&SourceManager::onSwitchSource, this,
@@ -44,8 +50,9 @@ SourceManager::SourceManager() : Node("SourceManager")
         "set_restart_requested",
         std::bind(&SourceManager::onSetRestartReq, this, std::placeholders::_1, std::placeholders::_2));
     
+    // Create main loop timer
     timer_ = this->create_wall_timer(
-        std::chrono::milliseconds(200),
+        std::chrono::milliseconds(130),
         std::bind(&SourceManager::timerCallback, this));
     
     // lifecycle_client_ = this->create_client<lifecycle_msgs::srv::ChangeState>("/xvins_lifecycle_node/change_state");
@@ -55,6 +62,7 @@ SourceManager::SourceManager() : Node("SourceManager")
 }
 
 void SourceManager::init() {
+    // Initialize each source instance
     auto self = shared_from_this();
     gps_source_ = std::make_unique<GPS>(self);
     slam_source_ = std::make_unique<SLAM>(self);
@@ -76,13 +84,18 @@ void SourceManager::imuCallback(const sensor_msgs::msg::Imu::SharedPtr msg) {
         msg->orientation.x,
         msg->orientation.y,
         msg->orientation.z);
+
+    rclcpp::Time imu_time_stamp = msg->header.stamp;
     
+    // Distribute IMU data to various sources for prediction/propagation
     // RCLCPP_INFO(this->get_logger(), "IMU data raw: [%f %f %f %f] ", orientation.w(), orientation.x(), orientation.y(), orientation.z());
     
-    if (gps_source_) gps_source_->setImudata(linearAcceleration, angularVelocity, orientation);
-    if (slam_source_) slam_source_->setImudata(linearAcceleration, angularVelocity, orientation);
+    if (gps_source_) gps_source_->setImudata(linearAcceleration, angularVelocity, orientation,imu_time_stamp);
+    if (slam_source_) slam_source_->setImudata(linearAcceleration, angularVelocity, orientation,imu_time_stamp);
 
+    // Update the status of the current source
     update();
+    // Publish high frequency propagation odometry
     publishPropagateOdometry();
     
 }
@@ -107,6 +120,7 @@ void SourceManager::onSetRestartReq(const std::shared_ptr<std_srvs::srv::SetBool
 
 void SourceManager::restartCheck() {
     // xie cheng yige
+    // Check if the origin needs to be restarted (either via a service request or the origin's own health check)
     if (restart_srv || slam_source_->canRestart()) {
         slam_source_->setRestartOffset(current_propagate_state_);
         std::thread([this]() {
@@ -125,6 +139,7 @@ void SourceManager::restartCheck() {
 
 void SourceManager::raisePriority(SourceBase::State target) {
     // mutx
+    // Raise the priority of the specified source to the highest
     auto it = std::find(priority_source_.begin(), priority_source_.end(), target);
     if (it != priority_source_.end()) {
         priority_source_.erase(it);
@@ -134,6 +149,7 @@ void SourceManager::raisePriority(SourceBase::State target) {
 }
 
 bool SourceManager::canRaisePriority(SourceBase::State target, std::string &reason) const{
+    // Check whether the target source is healthy and whether its priority can be improved
     if (target == SourceBase::State::GPS) {
         if (!gps_source_ || !gps_source_->isHealthy()) {
             reason = "GPS is not healthy or not ready.";
@@ -173,6 +189,7 @@ bool SourceManager::canRaisePriority(SourceBase::State target, std::string &reas
 
 void SourceManager::onSwitchSource(const std::shared_ptr<xion_msg::srv::SwitchSourceType::Request> req,
                                     std::shared_ptr<xion_msg::srv::SwitchSourceType::Response> res) {
+    // Handle service requests for switching sources
     SourceBase::State target;
     if (req->target == 0)      target = SourceBase::State::GPS;
     else if (req->target == 1) target = SourceBase::State::SLAM;
@@ -237,11 +254,13 @@ void SourceManager::onSwitchSource(const std::shared_ptr<xion_msg::srv::SwitchSo
 // }
 
 void SourceManager::checkSourceHealth() {
+    // Check the health status of each source
     const bool gps_healthy = gps_source_->isHealthy();
     const bool slam_healthy = slam_source_->isHealthy();
 
     // SourceBase::State state = SourceBase::State::UNINIT;
 
+    // Define a Lambda to check if a specific source is healthy
     auto healthy = [&](SourceBase::State s)->bool {
         switch (s) {
             case SourceBase::State::GPS: return gps_healthy;
@@ -251,6 +270,7 @@ void SourceManager::checkSourceHealth() {
         }
     };
 
+    // Selects the highest priority source currently available based on the priority list
     for (auto s : priority_source_) {
         if (healthy(s)) {
             // std::cout<< "11111111111" <<std::endl;
@@ -270,6 +290,7 @@ void SourceManager::checkSourceHealth() {
     // }
     // active_source_ = state;
 
+    // Log if source changes
     if (state != active_source_) {
         previous_source_ = active_source_;
         active_source_   = state;
@@ -283,6 +304,7 @@ void SourceManager::checkSourceHealth() {
 }
 
 void SourceManager::update() {
+    // Get propagation odometry data for the currently active source
     auto current_source  = getSource(active_source_);
     if (!current_source) return;
     current_propagate_state_ = current_source->getPropagateOdometry();
@@ -291,6 +313,7 @@ void SourceManager::update() {
 }
 
 void SourceManager::changeSourceType() {
+    // Detection source switching
     if (active_source_ != previous_source_ && previous_source_ != SourceBase::State::UNINIT) {
         RCLCPP_INFO(this->get_logger(), "State from %s changed to: %s", stateToString(previous_source_), stateToString(active_source_));
         is_state_changed_ = true;
@@ -307,6 +330,7 @@ void SourceManager::changeSourceType() {
             RCLCPP_INFO(this->get_logger(),"previous_source == nullptr || current_source == nullptr");
             return;
         }
+        // Get the propagation odometry of the previous source and the current source
         auto pre_odom = previous_source->getPropagateOdometry();
         auto curr_odom = current_source->getPropagateOdometry();
 
@@ -314,8 +338,10 @@ void SourceManager::changeSourceType() {
         const double yaw = pre_odom.yaw;
         //const Eigen::Quaterniond q = odom.q;
         
+        // Calculate Yaw angle deviation
         // double yaw_offset = normalizeAngle(curr_odom.yaw - yaw);
         double yaw_offset = normalizeAngle(yaw - curr_odom.yaw);
+        // Calculate position deviation (taking rotation into account)
         Eigen::Quaterniond q_offset (Rz(yaw_offset));
         q_offset.normalize();
         // std::cout << curr_odom.p << std::endl;
@@ -323,8 +349,10 @@ void SourceManager::changeSourceType() {
         // Eigen::Vector3d pos_offset = (curr_odom.p - Rz(yaw_offset) * pos);
         Eigen::Vector3d pos_offset = (pos - q_offset * curr_odom.p);
         
+        // Set the offset of the new source so that it aligns to the track of the old source
         current_source->setOffset(pos_offset, q_offset, yaw_offset);
 
+        // Record the starting and target points required for interpolation
         position_target_ = getSource(active_source_)->getPropagateOdometry().p;
         position_start_ = getSource(previous_source_)->getPropagateOdometry().p;
         orientation_target_ = getSource(active_source_)->getPropagateOdometry().q;
@@ -338,12 +366,14 @@ void SourceManager::changeSourceType() {
 }
 
 void SourceManager::interpolationFilter() {
+    // Smooth transition interpolation filter
     if (active_source_ == SourceBase::State::UNINIT) return;
     if (is_transitioning_) {
         rclcpp::Duration elapsed = this->now() - transition_start_time_;
         const auto trans = rclcpp::Duration::from_seconds(transition_duration_sec_);
 
         
+        // If the transition time ends, use the target value directly
         if (elapsed > trans) {
             current_propagate_state_.p = position_target_;
             current_propagate_state_.q = orientation_target_;
@@ -351,6 +381,7 @@ void SourceManager::interpolationFilter() {
 
             RCLCPP_INFO(this->get_logger(), "Smooth transition completed.");
         } else {
+            // Otherwise perform linear interpolation (position) and spherical interpolation (attitude)
             double alpha = elapsed.seconds() / transition_duration_sec_;
             Eigen::Vector3d interp_position = position_start_ + alpha * (position_target_ - position_start_);
             Eigen::Quaterniond interp_orientation = orientation_start_.slerp(alpha, orientation_target_);
@@ -361,6 +392,7 @@ void SourceManager::interpolationFilter() {
 }
 
 void SourceManager::publishPropagateOdometry() {
+    // Publish high frequency propagation odometry
 
     if (active_source_ == SourceBase::State::UNINIT) {
         return;
@@ -374,14 +406,15 @@ void SourceManager::publishPropagateOdometry() {
 
     
     
-    // RCLCPP_INFO(this->get_logger(), "imu_propagate pose: [%f %f %f] vel: [%f %f %f], q: [%f %f %f %f] ", 
-    //    propagated_odometry.pose.pose.position.x, propagated_odometry.pose.pose.position.y, propagated_odometry.pose.pose.position.z,
-    //    propagated_odometry.twist.twist.linear.x, propagated_odometry.twist.twist.linear.y, propagated_odometry.twist.twist.linear.z,
-    //    propagated_odometry.pose.pose.orientation.w, propagated_odometry.pose.pose.orientation.x, propagated_odometry.pose.pose.orientation.y, propagated_odometry.pose.pose.orientation.z);
+    RCLCPP_INFO(this->get_logger(), "imu_propagate pose: [%f %f %f] vel: [%f %f %f], q: [%f %f %f %f] ", 
+       propagated_odometry.pose.pose.position.x, propagated_odometry.pose.pose.position.y, propagated_odometry.pose.pose.position.z,
+       propagated_odometry.twist.twist.linear.x, propagated_odometry.twist.twist.linear.y, propagated_odometry.twist.twist.linear.z,
+       propagated_odometry.pose.pose.orientation.w, propagated_odometry.pose.pose.orientation.x, propagated_odometry.pose.pose.orientation.y, propagated_odometry.pose.pose.orientation.z);
     propagate_odometry_pub_->publish(propagated_odometry);
 }
 
 void SourceManager::publishOdometry() {
+    // Release of the ultimate fusion low-frequency odometer
     if (active_source_ == SourceBase::State::UNINIT) {
         return;
     }
@@ -395,6 +428,7 @@ void SourceManager::publishOdometry() {
 
     
 
+    // Release path for visualization
     geometry_msgs::msg::PoseStamped pose_stamped;
     pose_stamped.header.stamp = this->now();
     pose_stamped.header.frame_id = "world";
@@ -477,7 +511,9 @@ void SourceManager::publishOdometry() {
 // }
 
 void SourceManager::timerCallback() {
+    // Regularly check source health status
     checkSourceHealth();
+    // Check if a restart is needed
     restartCheck();
     // if (slam_source_->restart()) {
     //     RCLCPP_ERROR(this->get_logger(), "SLAM restart requested 1");
@@ -487,10 +523,13 @@ void SourceManager::timerCallback() {
     // }
     // changeSourcefromsrv();
     
+    // Handle source type switching logic
     changeSourceType();
 
+    // Perform interpolation filtering
     interpolationFilter();
     
+    // publish odometer
     publishOdometry();
     // publishPropagateOdometry();
 }

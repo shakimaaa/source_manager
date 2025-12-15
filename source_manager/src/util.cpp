@@ -3,6 +3,7 @@
 #include <cmath>
 
 Eigen::Quaterniond deltaQ(const Eigen::Vector3d& theta) {
+    // 计算旋转向量 theta 对应的四元数增量
     if (theta.squaredNorm() < Eigen::NumTraits<double>::epsilon()) {
         return Eigen::Quaterniond::Identity();
     }
@@ -11,6 +12,7 @@ Eigen::Quaterniond deltaQ(const Eigen::Vector3d& theta) {
     const Eigen::Vector3d half_theta = theta / 2.0;
     const double theta_norm = half_theta.norm();
 
+    // 使用小角度近似或完整公式
     if (theta_norm > 1e-5) {
         dq.w() = std::cos(theta_norm);
         dq.vec() = std::sin(theta_norm) * half_theta.normalized();
@@ -22,12 +24,14 @@ Eigen::Quaterniond deltaQ(const Eigen::Vector3d& theta) {
 }
 
 double normalizeAngle(double angle) {
+    // 将角度归一化到 [-PI, PI] 区间
     while (angle > M_PI)  angle -= 2.0 * M_PI;
     while (angle < -M_PI) angle += 2.0 * M_PI;
     return angle;
 }
 
 Eigen::Matrix3d Rz(double yaw) {
+    // 生成绕 Z 轴旋转 yaw 角的旋转矩阵
     return Eigen::AngleAxisd(yaw, Eigen::Vector3d::UnitZ()).toRotationMatrix();
 }
 double clamp1_(double x) { 

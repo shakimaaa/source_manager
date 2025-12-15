@@ -27,7 +27,8 @@ public:
 
     void setImudata(const Eigen::Vector3d& linearAcceleration,
                     const Eigen::Vector3d& angularVelocity,
-                    const Eigen::Quaterniond& orientation) override;
+                    const Eigen::Quaterniond& orientation,
+                    const rclcpp::Time imu_time_stamp) override;
     void setHealthy(bool healthy) override;
     void setCurrPose(const Eigen::Vector3d& pos, const Eigen::Vector3d& vel, const Eigen::Quaterniond& q) override;
     bool isHealthy() override;

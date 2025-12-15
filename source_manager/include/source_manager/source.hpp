@@ -6,6 +6,7 @@
 #include <cmath>
 #include <deque>
 #include "source_manager/util.hpp"
+#include "source_manager/ekf.hpp"
 
 
 // enum  class State { UNINIT = 0, SLAM = 1, GPS = 2 };
@@ -19,7 +20,8 @@ public:
 
     virtual void setImudata(const Eigen::Vector3d& linearAcceleration,
                             const Eigen::Vector3d& angularVelocity,
-                            const Eigen::Quaterniond& orientation);
+                            const Eigen::Quaterniond& orientation,
+                            const rclcpp::Time imu_time_stamp);
     virtual void setHealthy(bool healthy); 
     virtual void setCurrPose(const Eigen::Vector3d& pos, const Eigen::Vector3d& vel, const Eigen::Quaterniond& q);
     virtual bool isHealthy();
@@ -56,5 +58,25 @@ public:
     
 protected:
     std::shared_ptr<rclcpp::Node> node_;
+    // 每个源都有自己的EKF实例
+    std::unique_ptr<SourceEKF> ekf_;
+
+    // Add a new state machine to manage initial checks
+     enum class InitialCheckState {
+        PENDING,    // Waiting for first data
+        CHECKING,   // Stilling check in progress
+        COMPLETE    // Check completed
+    };
+
+
+    InitialCheckState initial_check_state_;
+    rclcpp::Time stillness_check_start_time_;
+    std::vector<Eigen::Vector3d> stillness_check_velocities_;
+    double stillness_velocity_threshold_;
+    double stillness_check_duration_;
+    bool init_check_false_restart;
+
+    // 新增的成员函数
+    void performInitialStillnessCheck(const Eigen::Vector3d& current_velocity);
 
 };
